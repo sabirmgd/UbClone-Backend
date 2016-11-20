@@ -56,7 +56,7 @@ $app->add(new \Slim\Middleware\HttpBasicAuthentication([
     }
 ]));
 
-
+// Another authenticator for the drivers
 $app->add(new \Slim\Middleware\HttpBasicAuthentication([
     "path" => ["/driver_api/testAuth/"],
     "secure" => false,

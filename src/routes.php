@@ -39,13 +39,14 @@ if(!$mail->send()) {
 }
 }
 
-function getPassengerID($userEmail,$App){
-		$getUserIDSql = 'SELECT ID FROM passengers WHERE email=?';
+function getUserID($userEmail,$App,$userType){
+	//getPassengerID
+		$getUserIDSql = "SELECT ID FROM  $userType WHERE email=?";
 		$getUserIDStatement = $App->db->prepare($getUserIDSql);
 		try{
 			$getUserIDStatement->execute(array($userEmail));
-			$passengerID= $getUserIDStatement->fetch()['ID'];
-			return $passengerID;
+			$userID= $getUserIDStatement->fetch()['ID'];
+			return $userID;
 		}catch (PDOException $ex){
 			return $ex->getMessage();
 		}
@@ -371,7 +372,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	{
 		// get the ID of the passenger
 	
-		$passengerID= getPassengerID ($email,$this);
+		$passengerID= getUserID ($email,$this,'passengers');
 		
 		list($pickupLongitude,$pickupLatitude) = explode(',',$CarRequest['pickup']);
 		list($destinationLatitude,$destinationLongitude) = explode(',',$CarRequest['dest']);
@@ -535,11 +536,11 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			
 });
 
-$app->get('/passenger_api/requests/', function($request, $response, $args){
+$app->post('/passenger_api/requests/', function($request, $response, $args){
 
 	global $userInfo;
 	$email= $userInfo['email'];
-	$passengerID=getPassengerID($email,$this);
+	$passengerID=getUserID($email,$this,'passengers');
 	
 	$rides=[];
 	$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `passengerID` FROM `requests` WHERE  `passengerID`= :passengerID';
@@ -739,9 +740,40 @@ $app->post('/driver_api/login/', function($request, $response, $args){
 });
 
 $app->post('/driver_api/requests/', function($request, $response, $args){
-	// auth 
-	$data=$request->getParsedBody();
-	// return the requests and their statuses
+	
+	global $userInfo;
+	$email= $userInfo['email'];
+	$driverID=getUserID($email,$this,'drivers');
+	
+	$rides=[];
+	$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `driverID` FROM `requests` WHERE  `driverID`= :driverID';
+	
+	$getRidesStatement = $this->db->prepare($getRidesSql);
+	$getRidesStatement->bindParam(':driverID',$driverID,PDO::PARAM_INT);
+	try{
+		
+		$getRidesStatement->execute();
+	}
+	catch(PDOException $ex)
+	{
+		$data = array ('status' => '1', 'error_msg' => $ex->getMessage() );
+		return $response->withJson($data,500);
+	}
+	
+	$data = array('status' => '0', 'rides' => []);
+	$rides = [];
+	while ($requestRow =  $getRidesStatement->fetch())
+	{   
+		$ride['request_id']= $requestRow ['ID'];
+		$ride['pickup'] = $requestRow['pickupLongitude'] . ',' . $requestRow['pickupLatitude'];
+		$ride['dest'] = $requestRow['destinationLongitude'] . ',' . $requestRow['destinationLatitude'];
+		$ride['time'] = $requestRow['requestTime'];
+		$ride['price'] = $requestRow['price'];
+		$ride['status'] = $requestRow['status'];
+		array_push($rides,$ride);
+	}
+	$data = array('status' => '0', 'rides' => $rides);
+	return $response->withJson($data,200);
 	
 
 });

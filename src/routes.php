@@ -67,6 +67,7 @@ function cancelRequestInRequests($requestID,$App){
 	
 	
 }
+
 function cancelRequestInRequests_driver($requestID,$App){
 	$cancelRequestSql ="UPDATE `request_driver` SET `status`='canceled'
 						WHERE 
@@ -86,6 +87,42 @@ function cancelRequestInRequests_driver($requestID,$App){
 						
 }
 
+
+function arrivedRequestInRequests($requestID,$App){
+	$cancelRequestSql = " UPDATE `requests` SET `status`= 'arrived' WHERE ID = :requestID";
+	$cancelRequestStatement= $App->db->prepare($cancelRequestSql);
+	$cancelRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
+	
+	try{
+		$cancelRequestStatement->execute();
+		return "arrived";
+	}catch(PDOException $ex)
+	{
+		return $ex->getMessage();
+	}
+	
+	
+}
+
+
+function arrivedRequestInRequests_driver($requestID,$App){
+	$cancelRequestSql ="UPDATE `request_driver` SET `status`='arrived'
+						WHERE 
+						requestID = :requestID
+						AND
+						status ='accepted'";
+	$cancelRequestStatement= $App->db->prepare($cancelRequestSql);
+	$cancelRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
+	
+	try{
+		$cancelRequestStatement->execute();
+		return "arrived";
+	}catch(PDOException $ex)
+	{
+		return $ex->getMessage();
+	}	
+						
+}
 
 $app->post('/passenger_api/login/', function($request, $response, $args){
 
@@ -569,11 +606,33 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 
 $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	//authentication header
-	// 0 if success
-	// 2 unknown
+	$data=getParsedBody();
+	$data=$request->getQueryParams();
 	
-	$data=$request->getParsedBody();
-	//$data['request_id']
+	if (! isset ($data['request_id']))
+	{
+		$data = array('status' => '4', 'error_msg' => 'Invalid request');
+		return $response->withJson($data, 400);
+	}
+	
+	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
+	$arrivedRequestResult = arrivedRequestInRequests ($requestID,$this);
+	if ($arrivedRequestResult == 'arrived')
+	{	$arrivedRequestResult = cancelRequestInRequests_driver($requestID,$this);
+		if ($arrivedRequestResult == 'arrived')
+		{
+			$data = array ('status' => '0');
+			return $response->withJson($data,200);
+		}
+		else {
+			$data = array ('status' => '1' , 'error_msg' => $arrivedRequestResult );
+			return $response->withJson($data,400);
+		}
+	}
+	else {
+		$data = array ('status' => '1' , 'error_msg' => $arrivedRequestResult );
+		return $response->withJson($data,400);
+	}
 	
 });
 

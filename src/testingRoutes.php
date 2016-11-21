@@ -20,7 +20,7 @@ function cancelRequestInRequests($requestID,$App){
 	
 	if (! isset ($data['request_id']))
 	{
-		$data = array('status' => '4', 'error_msg' => 'Invalid request');
+		$data = arra y('status' => '4', 'error_msg' => 'Invalid request');
 		return $response->withJson($data, 400);
 	}
 	
@@ -29,7 +29,7 @@ function cancelRequestInRequests($requestID,$App){
 	$cancelRequestResult = cancelRequestInRequests ($requestID,$this);
 	if ($cancelRequestResult == 'canceled')
 	{
-		$data = array ('status' => '0');
+		  $data = array ('status' => '0');
 		return $response->withJson($data,200);
 		
 	}

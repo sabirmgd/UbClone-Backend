@@ -714,9 +714,9 @@ $app->post('/driver_api/register/', function($request, $response, $args){
 
 
 $app->post('/driver_api/login/', function($request, $response, $args){
-	/* auth 
+	// auth 
 	global $userInfo;
-      // echo $userInfo['email'];
+       //echo $userInfo['email'];
 
 	$userStatement = $this->db->prepare('SELECT * FROM drivers WHERE email = ?');
 	$userStatement->execute(array($userInfo['email']));
@@ -724,18 +724,18 @@ $app->post('/driver_api/login/', function($request, $response, $args){
 	$data = ['status' => '0' ];
 
 	$userRow = $userStatement->fetch();
-	$passenger = [
+	$driver = [
 	'name' => $userRow['fullname'],
 	'email' => $userRow['email'],
 	'phone' => $userRow['phone'],
 	'gender' => $userRow['gender'],
 	];
-	$data['passenger'] = $passenger;
+	$data['driver'] = $driver;
 	$newResponse = $response->withJson($data, 200);
 
 	return $newResponse; 
 	
-*/
+
 });
 
 $app->post('/driver_api/requests/', function($request, $response, $args){

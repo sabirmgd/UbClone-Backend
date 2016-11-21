@@ -58,11 +58,11 @@ $app->add(new \Slim\Middleware\HttpBasicAuthentication([
 
 // Another authenticator for the drivers
 $app->add(new \Slim\Middleware\HttpBasicAuthentication([
-    "path" => ["/driver_api/testAuth/"],
+    "path" => ["/driver_api/login/"],
     "secure" => false,
     "authenticator" => new \Slim\Middleware\HttpBasicAuthentication\PdoAuthenticator([
         "pdo" => $pdo,
-        "table" => "passengers",
+        "table" => "drivers",
         "user" => "email",
         "hash" => "password"
     ]),

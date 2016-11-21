@@ -124,6 +124,8 @@ function arrivedRequestInRequests_driver($requestID,$App){
 						
 }
 
+
+
 $app->post('/passenger_api/login/', function($request, $response, $args){
 
 	global $userInfo;
@@ -606,8 +608,8 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 
 $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	//authentication header
-	$data=getParsedBody();
-	$data=$request->getQueryParams();
+	$data=$request->getParsedBody();
+	//$data=$request->getQueryParams();
 	
 	if (! isset ($data['request_id']))
 	{
@@ -618,7 +620,7 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
 	$arrivedRequestResult = arrivedRequestInRequests ($requestID,$this);
 	if ($arrivedRequestResult == 'arrived')
-	{	$arrivedRequestResult = cancelRequestInRequests_driver($requestID,$this);
+	{	$arrivedRequestResult = arrivedRequestInRequests_driver($requestID,$this);
 		if ($arrivedRequestResult == 'arrived')
 		{
 			$data = array ('status' => '0');
@@ -646,12 +648,77 @@ $app->get('/price', function($request, $response, $args){
 	
 });
 
+$app->post('/driver_api/register/', function($request, $response, $args){
+
+	$data = $request->getParsedBody();
+	
+	if (!(isset($data['email']) 
+		&& isset($data['password']) 
+	    && isset($data['gender']) 
+		&& isset($data['phone'])
+		&& isset($data['fullname'])
+		)){
+		$data = array('status' => '4', 'error_msg' => 'Invalid request');
+		return $response->withJson($data, 400);
+	}
+	
+	
+	$driver = [];
+	$driver['email'] = filter_var($data['email'], FILTER_SANITIZE_STRING);
+	$driver['password'] = filter_var($data['password'], FILTER_SANITIZE_STRING);
+	$driver['gender'] = filter_var($data['gender'], FILTER_SANITIZE_STRING);
+	$driver['phone'] = filter_var($data['phone'], FILTER_SANITIZE_STRING);
+	$driver['fullname'] = filter_var($data['fullname'], FILTER_SANITIZE_STRING);
+
+    // Check if user exist by checking the email field:
+	$driverStatement = $this->db->prepare('SELECT * FROM drivers where email = ?');
+	$driverStatement->execute(array($driver['email']));
+	$numberOfRows = $driverStatement->fetchColumn(); 
+	if ($numberOfRows != 0) {
+		$data = array('status' => '2', 'error_msg' => 'User already exist with this email');
+		return $response->withJson($data, 200);
+	}
+
+    // Check if phone exist:
+	$phoneStatement = $this->db->prepare('SELECT * FROM drivers where phone = ?');
+	$phoneStatement->execute(array($driver['phone']));
+	$numberOfRows = $phoneStatement->fetchColumn(); 
+	if ($numberOfRows != 0) {
+		$data = array('status' => '3', 'error_msg' => 'User already exist with this phone number');
+		return $response->withJson($data, 200);
+	}
+
+	// if no user then generate a Random Code and send it to the user and insert it into database
+	
+	$randomCode = generateRandomCode (6);
+	
+	// send the user an email 
+	//send_mail($driver['email'],$randomCode,'welcome to Uber');
+	//mail($driver['email'], 'welcome to Uber', $randomCode);
+	// Insert new user:
+	$hash = password_hash($driver['password'], PASSWORD_DEFAULT);
+	$insertStatement = $this->db->prepare('INSERT INTO `drivers`(`email`, `gender`, `fullname`, `password`,`phone` , `active`)  VALUES(?,?,?,?,?,?)');
+	
+	try {
+		$insertStatement->execute(array( $driver['email'],$driver['gender'] , $driver['fullname'],$hash,$driver['phone'] ,1));
+	} catch(PDOException $ex) {
+		$data = array('status' => '1', 'error_msg' => $ex->getMessage());
+		return $response->withJson($data, 500);
+	}
+
+	$data = array('status' => '0');
+	$newResponse = $response->withJson($data, 201);
+
+	return $newResponse;
+});
+
+
 $app->post('/driver_api/login/', function($request, $response, $args){
 	/* auth 
 	global $userInfo;
       // echo $userInfo['email'];
 
-	$userStatement = $this->db->prepare('SELECT * FROM passengers WHERE email = ?');
+	$userStatement = $this->db->prepare('SELECT * FROM drivers WHERE email = ?');
 	$userStatement->execute(array($userInfo['email']));
 
 	$data = ['status' => '0' ];

@@ -1,129 +1,52 @@
 <?php
 // Routes
-function generateRandomCode($length, $keyspace = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+require_once('User.php');
+require_once('Request.php');
+require_once('Passenger.php');
+require_once('Driver.php');
+
+function areAllParametersSet ($data,$parametersArray)
+{	$areSet = 1;
+	$parameterArrayLength = count ($parametersArray);
+	
+	for($i = 0; $i < $parameterArrayLength; $i++) {
+    if (! isset ($data[$parametersArray[$i]])){$areSet = 0; break; }
+	}
+	
+return $areSet; 	
+}
+
+function returnMissingParameterDataResponse($App)
 {
-    $str = '';
-    $max = mb_strlen($keyspace, '8bit') - 1;
-    for ($i = 0; $i < $length; ++$i) {
-        $str .= $keyspace[random_int(0, $max)];
-    }
-    return $str;
-}
-
-
-function send_mail($email,$message,$subject)
-{      
-$mail = new PHPMailer;
-$mail->SMTPDebug = 3;                               // Enable verbose debug output
-$mail->isSMTP();                                      // Set mailer to use SMTP
-$mail->Host = "smtp.gmail.com"; // Specify main and backup SMTP servers
-$mail->SMTPAuth = true;                               // Enable SMTP authentication
-$mail->Username='sabirmgd@gmail.com';  
-$mail->Password='kooora.com100plusfuck';                         // SMTP password
-$mail->SMTPSecure = 'ssl';                            // Enable TLS encryption, `ssl` also accepted
-$mail->Port = 465;                                    // TCP port to connect to
-$mail->SetFrom('sabirmgd@gmail.com','Uber');
-$mail->AddReplyTo('sabirmgd@gmail.com',"Uber");
-$mail->Subject    = $subject;
-$mail->MsgHTML($message);
-$mail->addAddress($email, 'sabir');
-$mail->isHTML(true);                                  // Set email format to HTML
-$mail->Subject= $subject;
-$mail->MsgHTML($message);
-
-if(!$mail->send()) {
-    echo 'Message could not be sent.';
-    echo 'Mailer Error: ' . $mail->ErrorInfo;
-} else {
-    echo 'Message has been sent';
-}
-}
-
-function getUserID($userEmail,$App,$userType){
-	//getPassengerID
-		$getUserIDSql = "SELECT ID FROM  $userType WHERE email=?";
-		$getUserIDStatement = $App->db->prepare($getUserIDSql);
-		try{
-			$getUserIDStatement->execute(array($userEmail));
-			$userID= $getUserIDStatement->fetch()['ID'];
-			return $userID;
-		}catch (PDOException $ex){
-			return $ex->getMessage();
-		}
+	$data = array('status' => '4', 'error_msg' => 'Invalid request');
+	return $App->response->withJson($data,400);
 	
 }
 
-function cancelRequestInRequests($requestID,$App){
-	$cancelRequestSql = " UPDATE `requests` SET `status`= 'canceled' WHERE ID = :requestID";
-	$cancelRequestStatement= $App->db->prepare($cancelRequestSql);
-	$cancelRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
-	
-	try{
-		$cancelRequestStatement->execute();
-		return "canceled";
-	}catch(PDOException $ex)
-	{
-		return $ex->getMessage();
+function returnDatabaseErrorResponse ($App,$error)
+{
+	$data = array('status' => '1', 'error_msg' => $error );
+	return $App->response->withJson($data, 500);
+}
+
+function returnSuccessResponse ($App)
+{
+	$data = array('status' => '0' );
+	return $App->response->withJson($data, 200);
+}
+
+function filterRequestParameters ($data,$parametersArray)
+{
+	$filteredData=[];
+	$parameterArrayLength = count ($parametersArray);
+
+	for($i = 0; $i < $parameterArrayLength; $i++) {
+    $filteredData[$parametersArray[$i]] = filter_var($data[$parametersArray[$i]] ,FILTER_SANITIZE_STRING);
 	}
-	
-	
+
+	return $filteredData;
 }
 
-function cancelRequestInRequests_driver($requestID,$App){
-	$cancelRequestSql ="UPDATE `request_driver` SET `status`='canceled'
-						WHERE 
-						requestID = :requestID
-						AND
-						status ='accepted'";
-	$cancelRequestStatement= $App->db->prepare($cancelRequestSql);
-	$cancelRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
-	
-	try{
-		$cancelRequestStatement->execute();
-		return "canceled";
-	}catch(PDOException $ex)
-	{
-		return $ex->getMessage();
-	}	
-						
-}
-
-
-function arrivedRequestInRequests($requestID,$App){
-	$cancelRequestSql = " UPDATE `requests` SET `status`= 'arrived' WHERE ID = :requestID";
-	$cancelRequestStatement= $App->db->prepare($cancelRequestSql);
-	$cancelRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
-	
-	try{
-		$cancelRequestStatement->execute();
-		return "arrived";
-	}catch(PDOException $ex)
-	{
-		return $ex->getMessage();
-	}
-	
-	
-}
-
-
-function arrivedRequestInRequests_driver($requestID,$App){
-	$cancelRequestSql ="UPDATE `request_driver` SET `status`='arrived'
-						WHERE 
-						requestID = :requestID
-						AND
-						status ='accepted'";
-	$cancelRequestStatement= $App->db->prepare($cancelRequestSql);
-	$cancelRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
-	
-	try{
-		$cancelRequestStatement->execute();
-		return "arrived";
-	}catch(PDOException $ex)
-	{
-		return $ex->getMessage();
-	}	
-						
-}
 
 
 
@@ -153,25 +76,15 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 $app->post('/passenger_api/register/', function($request, $response, $args){
 
 	$data = $request->getParsedBody();
+	$ExpectedParametersArray = array ('email','password','gender','fullname','phone');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
 	
-	if (!(isset($data['email']) 
-		&& isset($data['password']) 
-	    && isset($data['gender']) 
-		&& isset($data['phone'])
-		&& isset($data['fullname'])
-		)){
-		$data = array('status' => '4', 'error_msg' => 'Invalid request');
-		return $response->withJson($data, 400);
-	}
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
-	$passenger = [];
-	$passenger['email'] = filter_var($data['email'], FILTER_SANITIZE_STRING);
-	$passenger['password'] = filter_var($data['password'], FILTER_SANITIZE_STRING);
-	$passenger['gender'] = filter_var($data['gender'], FILTER_SANITIZE_STRING);
-	$passenger['phone'] = filter_var($data['phone'], FILTER_SANITIZE_STRING);
-	$passenger['fullname'] = filter_var($data['fullname'], FILTER_SANITIZE_STRING);
-
+	$passenger=$data;
+	
     // Check if user exist by checking the email field:
 	$passengerStatement = $this->db->prepare('SELECT * FROM passengers where email = ?');
 	$passengerStatement->execute(array($passenger['email']));
@@ -192,7 +105,7 @@ $app->post('/passenger_api/register/', function($request, $response, $args){
 
 	// if no user then generate a Random Code and send it to the user and insert it into database
 	
-	$randomCode = generateRandomCode (6);
+	$randomCode = User::generateRandomCode (6);
 	
 	// send the user an email 
 	//send_mail($passenger['email'],$randomCode,'welcome to Uber');
@@ -203,10 +116,7 @@ $app->post('/passenger_api/register/', function($request, $response, $args){
 	
 	try {
 		$insertStatement->execute(array( $passenger['email'],$passenger['gender'] , $passenger['fullname'],$hash,$passenger['phone'] , $randomCode));
-	} catch(PDOException $ex) {
-		$data = array('status' => '1', 'error_msg' => $ex->getMessage());
-		return $response->withJson($data, 500);
-	}
+	} catch(PDOException $ex) {return returnDatabaseErrorResponse ($this,$ex);}
 
 	$data = array('status' => '0');
 	$newResponse = $response->withJson($data, 201);
@@ -226,11 +136,11 @@ $app->post('/passenger_api/email_verification/', function($request, $response, $
 	global $userInfo;
 	$data = $request->getParsedBody();
 	
-	if (!(isset($data['code']) 
-		)){
-		$data = array('status' => '4', 'error_msg' => 'Invalid request');
-		return $response->withJson($data, 400);
-	}
+	$ExpectedParametersArray = array ('code');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
 	
 	
 	
@@ -242,14 +152,8 @@ $app->post('/passenger_api/email_verification/', function($request, $response, $
 	//echo $userEmail;
 	
 	
-	try {
-		$isVerifiedStatement->execute(array($email));
-	}
-	catch (PDOException $ex){
-		$data = array('status' => '1', 'error_msg' => $ex->getMessage());
-		return $response->withJson($data, 500);
-		
-	}
+	try {$isVerifiedStatement->execute(array($email));}
+	catch(PDOException $ex) {return returnDatabaseErrorResponse ($this,$ex);}
 	
 	$verificationStatus= $isVerifiedStatement->fetch()['verified'];
 	if ($verificationStatus == 1)
@@ -273,18 +177,17 @@ $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 
 	global $userInfo;
 	$data=$request->getQueryParams();
-	if (! (isset($data['location'])&& 
-		   isset($data['count'])
-	   )){
-		$data= array('status' => '4', 'error_msg' => 'Invalid request');
-		return $response->withJson($data,400);
-	}
+
+	$ExpectedParametersArray = array ('location','count');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
 	$locationString=  filter_var($data['location'], FILTER_SANITIZE_STRING);
 	$count = filter_var($data['count'], FILTER_SANITIZE_STRING);
 	$count=intval ($count);
 	list($longitude,$latitude) = explode(',',$locationString);
-	//echo $longitude, " ", $latitude;
+	
 	
 	
 	// get the n closest drivers 
@@ -308,12 +211,7 @@ $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 		$getCloseDriversStatement->bindParam(4, $count, PDO::PARAM_INT);
 		$getCloseDriversStatement->execute();
 		
-	}catch (PDOException $ex)
-	{
-		$data = array('status' => '1', 'error_msg' => $ex->getMessage());
-		return $response->withJson($data, 500);
-		
-	}
+	}catch(PDOException $ex) {return returnDatabaseErrorResponse ($this,$ex);}
 	
 	
 	$data = array('status' => '0', 'drivers' => []);
@@ -335,203 +233,65 @@ $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 });
 
 $app->get('/passenger_api/driver/', function ($request, $response, $args) {
-   
+	 
 	 global $userInfo;
-	 $email= $userInfo['email'];
-	 //echo  $email;
-   // check that all the data is there
-	$data=$request->getQueryParams();
-	if (!(isset($data['pickup']) 
-		&& isset($data['dest']) 
-	    && isset($data['female_driver']) 
-		&& isset($data['notes'])
-		&& isset($data['price'])
-		&& isset($data['request_id'])
-		&& isset($data['time'])
-		)){
-		$data = array('status' => '4', 'error_msg' => 'Invalid request');
-		return $response->withJson($data, 400);
-	}
+	 $email = $userInfo['email'];
+	 
+	 $tableName='passengers';
+	 
+	 $data=$request->getQueryParams();
 	
-	// filter the request strings
+	 $ExpectedParametersArray = array ('pickup','dest','female_driver','notes','price','request_id','time');
+	 
+	 $areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	 
+	 if (!$areSet){return returnMissingParameterDataResponse($this);}
+	 
+	 $data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
-	$CarRequest = [];
-	$CarRequest['request_id'] = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
-	$CarRequest['pickup'] = filter_var($data['pickup'], FILTER_SANITIZE_STRING);
-	$CarRequest['dest'] = filter_var($data['dest'], FILTER_SANITIZE_STRING);
-	$CarRequest['female_driver'] = filter_var($data['female_driver'], FILTER_SANITIZE_STRING);
-	$CarRequest['notes'] = filter_var($data['notes'], FILTER_SANITIZE_STRING);
-	$CarRequest['price'] = filter_var($data['price'], FILTER_SANITIZE_STRING);
-	$CarRequest['time'] = filter_var($data['time'], FILTER_SANITIZE_STRING);
+	$Request=$data;
 	
-	//echo $CarRequest['time'];
-	// check if the ID is equal -1, if its  -1, then that means this is the first time this request is sent 
-	// first time request
-	$requestID =$CarRequest['request_id'];
-	if ( $CarRequest['request_id'] == '-1')
+	// get request parameters
+	$requestID =$Request['request_id'];
+	$passengerID= User::getUserID($email,$tableName,$this); //($email,$this,'passengers');	
+	list($pickupLongitude,$pickupLatitude) = explode(',',$Request['pickup']);
+	list($destinationLatitude,$destinationLongitude) = explode(',',$Request['dest']);
+	$time=Request::getTime ($Request['time']);
+	$lastUpdatedMinute = 1000;
+	$genderBool= $Request['female_driver'];
+	
+	if ( Request::isAnewRequest($requestID))
 	{
-		// get the ID of the passenger
-	
-		$passengerID= getUserID ($email,$this,'passengers');
-		
-		list($pickupLongitude,$pickupLatitude) = explode(',',$CarRequest['pickup']);
-		list($destinationLatitude,$destinationLongitude) = explode(',',$CarRequest['dest']);
-		
-		if ($CarRequest['time'] == 'now')
-		{  // date_default_timezone_set("Asia/Kuala_Lumpur");
-			$date = date_create();
-			$time =	 date_format($date, 'Y-m-d H:i:s');
-			//echo $time;
-		}
-		else {
-			$time = date('Y-m-d H:i:s', $CarRequest['time']);
-		
-			//echo $time;
-			}
-		
-	
-		//$time = strtotime($CarRequest['time']);
-		
-		$createRequestSql= "INSERT INTO `requests`(`pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, `requestTime`, `femaleDriver`, `notes`, `price`, `passengerID`) VALUES (?,?,?,?,?,?,?,?,?)";
-		//$getLastIDSql='SELECT LAST_INSERT_ID();';
-		$createRequestStatement = $this->db->prepare($createRequestSql);
-		
-		try // insert into the requests table 
+		$requestID= Request::insert_aRequestInRequestsTable($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$Request['female_driver'],$Request['notes'],$Request['price'],$passengerID,$this);
+	}	
+		$requestStatus = Request::getRequestStatusInRequestsTable($requestID,$this);
+		echo  $requestStatus;
+		if (Request::isRequestPendingInRequestsTable ($requestID,$this))
+			
 		{	
-			$createRequestStatement->execute(array ($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$CarRequest['female_driver'],$CarRequest['notes'],$CarRequest['price'],$passengerID));
-			$requestID = $this->db->lastInsertId();
-			//$data = array ('status' => '0', 'request_id' => $requestID );
-			
-		}catch (PDOException $ex){
-			$data = array ('status' => '1', 'error_msg' => $ex->getMessage() );
-			return $response->withJson($data,500);
-		}
 		
-	}
-	 
-	 
-	 
-	 // check if the request is still pending 
-	 
-		$isStatusPendingSql = "SELECT `status` FROM `requests` 
-							WHERE 
-							ID = :requestID";
-							
-		$isStatusPendingStatement= $this->db->prepare($isStatusPendingSql);
-		$isStatusPendingStatement->bindParam(":requestID",$requestID,PDO::PARAM_INT);
+		$driverID = Request::getClosestDriver($pickupLatitude,$pickupLongitude,$requestID,$time,$genderBool,$lastUpdatedMinute,$this);
 		
-		try{
-			$isStatusPendingStatement->execute();
-			$requestStatus= $isStatusPendingStatement->fetch()['status'];
-			
-		}
-		catch(PDOException $ex){
-				$data = array ('status' => '1', 'error_msg' => $ex->getMessage() );
-				return $response->withJson($data,500);
-				}
-		
-		
-		if ($requestStatus == 'pending'){
-		
-	 // if this is not the first time for this request 
-	 //  find the driver, and insert an entery in the request_driver 
-			
-			$getCloseDriversDidntMissSql=' SELECT  * , 111.045 * DEGREES(ACOS(COS(RADIANS(:latitude)) * COS(RADIANS(latitude))
-			* COS(RADIANS(longitude) - RADIANS(:longitude))
-			+ SIN(RADIANS(:latitude))
-			* SIN(RADIANS(latitude))))
-			AS distance_in_km 
-			FROM drivers
-			WHERE   
-			ID NOT IN (SELECT driverID FROM request_driver
-                  WHERE status IN ("missed","rejected") AND
-                  requestID = :requestID)
-			AND active= 1
-			AND TIMESTAMPDIFF(MINUTE,lastUpdated, NOW()) < 1000
-			AND ID NOT IN (SELECT driverID FROM requests WHERE ABS (TIMESTAMPDIFF(MINUTE,:timeo,requestTime) ) < 60
-						  AND status="accepted")';
-			
-			$genderSql = "";
-			if ($CarRequest['female_driver'] == "1")
-			{
-			$genderSql = " AND gender =	:female_driver";	
-			}
-			
-			$orderAndLimtQuery = " ORDER BY distance_in_km ASC LIMIT 0,1";
-			
-			$getClosestDriverQuery=$getCloseDriversDidntMissSql . $genderSql . $orderAndLimtQuery;
-			
-			$getCloseDriverStatment=$this->db->prepare($getClosestDriverQuery);
-			
-			$getCloseDriverStatment->bindParam(':latitude', $pickupLatitude, PDO::PARAM_STR);
-			$getCloseDriverStatment->bindParam(':longitude', $pickupLongitude, PDO::PARAM_STR);
-			$getCloseDriverStatment->bindParam(':requestID', $requestID, PDO::PARAM_INT);
-			$getCloseDriverStatment->bindParam(':timeo', $time, PDO::PARAM_STR);
-			if ($CarRequest['female_driver'] == "1"){
-				$gender ='female';
-			$getCloseDriverStatment->bindParam(':female_driver', $gender, PDO::PARAM_STR);
-			}
-			
-			try{
-			$getCloseDriverStatment->execute();
-			$driverID=$getCloseDriverStatment->fetch()['ID'];
 			// in case no driver 
 			if ($driverID == null)
 			{
-				
-				$noDriverSql = ' UPDATE requests SET `status`= "noDriver"
-								WHERE 
-								ID = :requestID';
-				$noDriverStatement = $this->db->prepare($noDriverSql);
-				$noDriverStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
-				
-				try{
-					$noDriverStatement->execute();
-					$data = array ('status' => '3', 'error_msg' => 'it seems like drivers are not available not, please try again shortly' );
-					return $response->withJson($data,200);
-				}
-				catch(PDOException $ex){
-					$data = array ('status' => '1', 'error_msg' => $ex->getMessage() );
-					return $response->withJson($data,500);
-			
-					}
-				
-				
+				$status='noDriver';
+				Request::setRequestStatusInRequestsTable($requestID,$status,$this);
+				$data = array ('status' => '3', 'error_msg' => 'it seems like drivers are not available not, please try again shortly' );
+				return $response->withJson($data,200);
 			}
 			
-			}
 			
-			catch(PDOException $ex){
-			$data = array ('status' => '1', 'error_msg' => $ex->getMessage() );
-			return $response->withJson($data,500);
-			
-		   }
 			// then add it to request_driver table with missed status 
 			
-			$insertToDriverRequestSql='INSERT INTO `request_driver`(`requestID`, `driverID`) VALUES (:requestID,:driverID)';
-			$insertToDriverRequestStatement= $this->db->prepare($insertToDriverRequestSql);
-		
-			$insertToDriverRequestStatement->bindParam(':requestID' ,$requestID , PDO::PARAM_INT);
-			$insertToDriverRequestStatement->bindParam(':driverID' ,$driverID ,PDO::PARAM_INT);
-		
-			try{
-			$insertToDriverRequestStatement->execute();
+			Request::insert_aRequestInRequests_DriverTable($requestID,$driverID,$this);
 			$data = array ('status' => '0', 'request_id' => $requestID );
 			return $response->withJson($data,200);
-			}
-			catch(PDOException $ex){
-			$data = array ('status' => '1', 'error_msg' => $ex->getMessage() );
-			return $response->withJson($data,500);
-			
 		}
-		
-		}
-		else 
-			
+		else // if request is not pending, return its status 
 			{
 				$data = array ('status' => '5', 'request_status' => $requestStatus );
 				return $response->withJson($data,200);
-				
 			}
 			
 });
@@ -540,68 +300,34 @@ $app->post('/passenger_api/requests/', function($request, $response, $args){
 
 	global $userInfo;
 	$email= $userInfo['email'];
-	$passengerID=getUserID($email,$this,'passengers');
+	$tableName='passengers';
 	
-	$rides=[];
-	$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `passengerID` FROM `requests` WHERE  `passengerID`= :passengerID';
+	$passengerID= User::getUserID($email,$tableName,$this);
+	$rides = Passenger::getRides($passengerID,$this);
 	
-	$getRidesStatement = $this->db->prepare($getRidesSql);
-	$getRidesStatement->bindParam(':passengerID',$passengerID,PDO::PARAM_INT);
-	try{
-		
-		$getRidesStatement->execute();
-	}
-	catch(PDOException $ex)
-	{
-		$data = array ('status' => '1', 'error_msg' => $ex->getMessage() );
-		return $response->withJson($data,500);
-	}
-	
-	$data = array('status' => '0', 'rides' => []);
-	$rides = [];
-	while ($requestRow =  $getRidesStatement->fetch())
-	{   
-		$ride['request_id']= $requestRow ['ID'];
-		$ride['pickup'] = $requestRow['pickupLongitude'] . ',' . $requestRow['pickupLatitude'];
-		$ride['dest'] = $requestRow['destinationLongitude'] . ',' . $requestRow['destinationLatitude'];
-		$ride['time'] = $requestRow['requestTime'];
-		$ride['price'] = $requestRow['price'];
-		$ride['status'] = $requestRow['status'];
-		array_push($rides,$ride);
-	}
 	$data = array('status' => '0', 'rides' => $rides);
 	return $response->withJson($data,200);
 
 });
 
 $app->get('/passenger_api/cancel/', function($request, $response, $args){
-	
+
 	$data=$request->getQueryParams();
-	//print($data);
-	if (! isset ($data['request_id']))
-	{
-		$data = array('status' => '4', 'error_msg' => 'Invalid request');
-		return $response->withJson($data, 400);
-	}
-	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
-	$cancelRequestResult = cancelRequestInRequests ($requestID,$this);
-	if ($cancelRequestResult == 'canceled')
-	{	$cancelRequestResult = cancelRequestInRequests_driver($requestID,$this);
-		if ($cancelRequestResult == 'canceled')
-		{
-			$data = array ('status' => '0');
-			return $response->withJson($data,200);
-		}
-		else {
-			$data = array ('status' => '1' , 'error_msg' => $cancelRequestResult );
-			return $response->withJson($data,400);
-		}
-	}
-	else {
-		$data = array ('status' => '1' , 'error_msg' => $cancelRequestResult );
-		return $response->withJson($data,400);
-	}
 	
+	$ExpectedParametersArray = array ('request_id');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	 
+	$requestID = $data['request_id'];
+	$status='canceled';
+	//Request::setRequestStatusInRequestsTable($requestID,$status,$this);
+	Passenger::cancelRequestInRequests($requestID,$this);
+	Passenger::cancelRequestInRequest_Driver($requestID,$this);
+	
+	$data = array ('status' => '0');
+	return $response->withJson($data,200);
+
 });
 
 // 
@@ -610,7 +336,7 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	//authentication header
 	$data=$request->getParsedBody();
-	//$data=$request->getQueryParams();
+	
 	
 	if (! isset ($data['request_id']))
 	{
@@ -619,24 +345,10 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	}
 	
 	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
-	$arrivedRequestResult = arrivedRequestInRequests ($requestID,$this);
-	if ($arrivedRequestResult == 'arrived')
-	{	$arrivedRequestResult = arrivedRequestInRequests_driver($requestID,$this);
-		if ($arrivedRequestResult == 'arrived')
-		{
-			$data = array ('status' => '0');
-			return $response->withJson($data,200);
-		}
-		else {
-			$data = array ('status' => '1' , 'error_msg' => $arrivedRequestResult );
-			return $response->withJson($data,400);
-		}
-	}
-	else {
-		$data = array ('status' => '1' , 'error_msg' => $arrivedRequestResult );
-		return $response->withJson($data,400);
-	}
-	
+	Passenger::arrivedRequestInRequests($requestID,$this);
+	Passenger::arrivedRequestInRequests_driver($requestID,$this);
+	$data = array ('status' => '0');
+	return $response->withJson($data,200);
 });
 
 $app->get('/time', function($request, $response, $args){
@@ -645,32 +357,26 @@ $app->get('/time', function($request, $response, $args){
 });
 
 $app->get('/price', function($request, $response, $args){
-	// to be added by Islam 
+	
 	
 });
 
 $app->post('/driver_api/register/', function($request, $response, $args){
-
+	
+	//get the data from the request
 	$data = $request->getParsedBody();
+	// set the request excpected paramaters 
+	$ExpectedParametersArray = array ('email','password','gender','fullname','phone');
+	// check if all the paramaters are set 
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	// if they are not set return the response
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	
-	if (!(isset($data['email']) 
-		&& isset($data['password']) 
-	    && isset($data['gender']) 
-		&& isset($data['phone'])
-		&& isset($data['fullname'])
-		)){
-		$data = array('status' => '4', 'error_msg' => 'Invalid request');
-		return $response->withJson($data, 400);
-	}
+	// if they are all set, filter them
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
+	$driver = $data;
 	
-	$driver = [];
-	$driver['email'] = filter_var($data['email'], FILTER_SANITIZE_STRING);
-	$driver['password'] = filter_var($data['password'], FILTER_SANITIZE_STRING);
-	$driver['gender'] = filter_var($data['gender'], FILTER_SANITIZE_STRING);
-	$driver['phone'] = filter_var($data['phone'], FILTER_SANITIZE_STRING);
-	$driver['fullname'] = filter_var($data['fullname'], FILTER_SANITIZE_STRING);
-
     // Check if user exist by checking the email field:
 	$driverStatement = $this->db->prepare('SELECT * FROM drivers where email = ?');
 	$driverStatement->execute(array($driver['email']));
@@ -691,7 +397,7 @@ $app->post('/driver_api/register/', function($request, $response, $args){
 
 	// if no user then generate a Random Code and send it to the user and insert it into database
 	
-	$randomCode = generateRandomCode (6);
+	$randomCode = User::generateRandomCode (6);
 	
 	// send the user an email 
 	//send_mail($driver['email'],$randomCode,'welcome to Uber');
@@ -743,7 +449,8 @@ $app->post('/driver_api/requests/', function($request, $response, $args){
 	
 	global $userInfo;
 	$email= $userInfo['email'];
-	$driverID=getUserID($email,$this,'drivers');
+	$tableName='drivers';
+	$driverID=User::getUserID($email,$tableName,$this);
 	
 	$rides=[];
 	$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `driverID` FROM `requests` WHERE  `driverID`= :driverID';
@@ -779,19 +486,54 @@ $app->post('/driver_api/requests/', function($request, $response, $args){
 });
 
 $app->post('/driver_api/accept/', function($request, $response, $args){
-	// auth 
+
 	$data=$request->getParsedBody();
-	//$data['request_id']
-	//$data['accepted'] 
+	//print($data);
+	$ExpectedParametersArray = array ('request_id','accepted');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
 	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$requestID = $data['request_id'];
+	$acceptOrReject = $data['accepted'];
+	
+	global $userInfo;
+	$email= $userInfo['email'];
+	$tableName='drivers';
+
+	$driverID = User::getUserID($email,$tableName,$this);
+	//$driverID,$requestID,$acceptOrReject,$this
+	
+	$driverAcceptedRequestID=Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+	if ($driverAcceptedRequestID == null || $driverAcceptedRequestID == $driverID)
+	{
+	Driver::acceptOrRejecctRequestInRequests($requestID,$driverID,$acceptOrReject,$this);
+	Driver::acceptOrRejectRequestInRequests_driver($driverID,$requestID,$acceptOrReject,$this);
+	return returnSuccessResponse($this);
+	}
+	
+	else if ($driverAcceptedRequestID != $driverID){
+		
+		$data=array('status' => '3', 'error_msg' => 'Request has been accepted by another driver');
+		return $response->withJson($data,400);
+		
+	}
 });
 
 $app->post('/driver_api/active/', function($request, $response, $args){
 	// auth 
 	$data=$request->getParsedBody();
-	//$data['active']
-	//$data['location'] 
+	
+	$ExpectedParametersArray = array ('active','location');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	
 	
 	
 });
@@ -819,7 +561,7 @@ $app->post('/driver_api/location/', function($request, $response, $args){
 });
 
 
-$app->post('/driver_api/testAuth/', function($request, $response, $args){
+$app->post('/driver_api/testpsh/', function($request, $response, $args){
 	// auth 
 	//$data=$request->getParsedBody();
 	//$data['request_id']
@@ -827,9 +569,56 @@ $app->post('/driver_api/testAuth/', function($request, $response, $args){
 		return $response->withJson($data,200);
 });
 
+$app->get('/driver_api/testpush/', function($request, $response, $args){
+  $apiKey = "AIzaSyAJAYksJUwHGCR2RC7WLatF7mb5Ow_08lM";
+
+    // Replace with the real client registration IDs
+    $registrationIDs = array("eRurufTwDO8:APA91bHVAVK-iVO9IRLoDYnb-nEoKheSJRISmg56-Vbrk_vmkMe1-CTJOxwDxEoTwMi42j4G86VJXzRxEDONJ8F43XGWnFzg9J-i5Xa6qfaI2Fo2zTjEN9z0k3Nf0PZQCHjfm7JOT88L");
+
+    // Message to be sent
+    $message = "driver canceled the trip";
+
+    // Set POST variables
+    $url = 'https://android.googleapis.com/gcm/send';
+
+    $fields = array(
+        'registration_ids' => $registrationIDs,
+        'notification' => array( "body" => $message , "title" => "Uber", "icon" => "appicon"  ),
+    );
+    $headers = array(
+        'Authorization: key=' . $apiKey,
+        'Content-Type: application/json'
+    );
+
+    // Open connection
+    $ch = curl_init();
+
+    // Set the URL, number of POST vars, POST data
+    curl_setopt( $ch, CURLOPT_URL, $url);
+    curl_setopt( $ch, CURLOPT_POST, true);
+    curl_setopt( $ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true);
+    //curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $fields));
+
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    // curl_setopt($ch, CURLOPT_POST, true);
+    // curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode( $fields));
+
+    // Execute post
+    $result = curl_exec($ch);
+
+    // Close connection
+    curl_close($ch);
+    // print the result if you really need to print else neglate thi
+    echo $result;
+    //print_r($result);
+    //var_dump($result);
 
 
+});
 
+?>
 
 
 

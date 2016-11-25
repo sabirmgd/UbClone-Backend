@@ -74,7 +74,36 @@ class Driver {
 	}
 	
 	
-	
+	public static function activateDriver ($driverEmail,$activeBool,$locationString,$App){
+		// get the driver with the ID
+		// SET active to 1 or 0
+		
+		// if its 1, SET active to 1, update his last updated to now;
+		list($longitude,$latitude) = explode(',',$locationString);
+		$activateDriverSql = "UPDATE `drivers` SET 
+							 `active`= :activeBool ";
+		$lonitudeLatidudeSql = " ,`longitude`= :longitude ,
+									`latitude`= :latitude " ;		
+		$activateDriverSql = $activateDriverSql . $lonitudeLatidudeSql;
+		
+		if ($activeBool == '1'){
+			
+			$lastUpdatedSql =	" ,`lastUpdated`= CURRENT_TIMESTAMP ";
+			$activateDriverSql = $activateDriverSql . $lastUpdatedSql  ;
+			}
+		$emailSql = " WHERE `email` = :email " ;
+		$activateDriverSql = $activateDriverSql . $emailSql ;
+		
+		$activateDriverStatement = $App->db->prepare($activateDriverSql);
+		$activateDriverStatement->bindParam(':activeBool',$activeBool,PDO::PARAM_INT);
+		$activateDriverStatement->bindParam(':email',$driverEmail,PDO::PARAM_STR);
+		$activateDriverStatement->bindParam(':longitude',$longitude,PDO::PARAM_STR);
+		$activateDriverStatement->bindParam(':latitude',$latitude,PDO::PARAM_STR);
+		
+		
+		$activateDriverStatement->execute();
+		
+	}
 	
 	
 }

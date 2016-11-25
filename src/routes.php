@@ -523,7 +523,11 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 });
 
 $app->post('/driver_api/active/', function($request, $response, $args){
-	// auth 
+	
+	global $userInfo;
+	$email= $userInfo['email'];
+	
+	
 	$data=$request->getParsedBody();
 	
 	$ExpectedParametersArray = array ('active','location');
@@ -534,6 +538,7 @@ $app->post('/driver_api/active/', function($request, $response, $args){
 	$data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
 	
+	Driver::activateDriver ($email,$data['active'] ,$data['location'],$this);
 	
 	
 });

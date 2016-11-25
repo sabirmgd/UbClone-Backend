@@ -30,27 +30,49 @@ class Passenger extends User {
 	
 	public static function cancelRequestInRequests($requestID,$App){
 	$status = 'canceled';
-	
 	Request::setRequestStatusInRequestsTable($requestID,$status,$App);	
 	}
 	
 	public static function cancelRequestInRequest_Driver($requestID,$App){
 	$newStatus = 'canceled';
-	$oldStatus = 'accepted';
-	Request::setRequestStatusInRequest_DriverTable ($requestID, null,$oldStatus,$newStatus,$App);
+	$driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$App);
+	Request::setRequestStatusInRequest_DriverTable($requestID,$driverID ,$newStatus,$App);
 	}
 	
 	public static function arrivedRequestInRequests($requestID,$App){
 	$status = 'completed';
-	
 	Request::setRequestStatusInRequestsTable($requestID,$status,$App);	
 	}
 	
 	
 	public static function arrivedRequestInRequests_driver($requestID,$App){
 	$newStatus = 'completed';
-	$oldStatus = 'accepted';
-	Request::setRequestStatusInRequest_DriverTable ($requestID, null,$oldStatus,$newStatus,$App);
+	$driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$App);
+	Request::setRequestStatusInRequest_DriverTable($requestID,$driverID ,$newStatus,$App);
+	}
+	
+	public static function doesPassengerHavePendingOrAcceptedRequest($passengerID,$App)
+	{
+		$getStatusOfPendingOrAcceptedRequestsSql="SELECT `ID` FROM `requests` WHERE 
+		`passengerID`=" .$passengerID . " AND
+		`status` IN ('pending','accepted') ";
+	
+		$getStatusOfPendingOrAcceptedRequestsSqlStatement = $App->db->prepare($getStatusOfPendingOrAcceptedRequestsSql);
+		
+		$getStatusOfPendingOrAcceptedRequestsSqlStatement->execute();
+		$number_of_rows = (int) $getStatusOfPendingOrAcceptedRequestsSqlStatement->fetchColumn(); 
+		if ( $number_of_rows == 0)
+		{
+			return (array ('status' => '0', 'no' => $number_of_rows));
+		}
+		else {
+			
+
+			return (array('status' => '1' , 'ID' => $number_of_rows));
+		}
+		// if no pending or accepted request, return 0
+		// if yes, return the status 
+		
 	}
 }
 		

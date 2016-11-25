@@ -4,7 +4,7 @@ require_once('User.php');
 require_once('Request.php');
 require_once('Passenger.php');
 require_once('Driver.php');
-
+require_once('Firebase.php');
 function areAllParametersSet ($data,$parametersArray)
 {	$areSet = 1;
 	$parameterArrayLength = count ($parametersArray);
@@ -54,7 +54,14 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 
 	global $userInfo;
       // echo $userInfo['email'];
-
+	$data = $request->getParsedBody();
+	$ExpectedParametersArray = array ('registration_token');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	echo $data['registration_token'];
 	$userStatement = $this->db->prepare('SELECT * FROM passengers WHERE email = ?');
 	$userStatement->execute(array($userInfo['email']));
 
@@ -260,13 +267,22 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	$lastUpdatedMinute = 1000;
 	$genderBool= $Request['female_driver'];
 	
+	// if the passenger already has a pending or accepted request, return its id 
+	 
+	 $doesPassengerHaveOldRequest = Passenger::doesPassengerHavePendingOrAcceptedRequest ($passengerID,$this) ;
+
+	 if ($doesPassengerHaveOldRequest ['status'] == '1'  ){
+		$requestID =  $doesPassengerHaveOldRequest['ID'];
+		
+	}
 	if ( Request::isAnewRequest($requestID))
-	{
+	{ // does driver have a pending or accepted request
+		
 		$requestID= Request::insert_aRequestInRequestsTable($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$Request['female_driver'],$Request['notes'],$Request['price'],$passengerID,$this);
 	}	
 		$requestStatus = Request::getRequestStatusInRequestsTable($requestID,$this);
-		echo  $requestStatus;
-		if (Request::isRequestPendingInRequestsTable ($requestID,$this))
+		
+		if ($requestStatus == 'pending')
 			
 		{	
 		
@@ -288,7 +304,13 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			$data = array ('status' => '0', 'request_id' => $requestID );
 			return $response->withJson($data,200);
 		}
-		else // if request is not pending, return its status 
+		else if ($requestStatus == 'accepted' )
+		{
+			$data = array ('status' => '6', 'request_id' => $requestID );
+			return $response->withJson($data,200);
+			
+		}
+		else if ($requestStatus == 'completed' || $requestStatus == 'canceled')// if request is not pending, return its status 
 			{
 				$data = array ('status' => '5', 'request_status' => $requestStatus );
 				return $response->withJson($data,200);
@@ -507,13 +529,22 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 	//$driverID,$requestID,$acceptOrReject,$this
 	
 	$driverAcceptedRequestID=Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
-	if ($driverAcceptedRequestID == null || $driverAcceptedRequestID == $driverID)
+	echo $driverAcceptedRequestID;
+	if ($driverAcceptedRequestID == null )
 	{
 	Driver::acceptOrRejecctRequestInRequests($requestID,$driverID,$acceptOrReject,$this);
 	Driver::acceptOrRejectRequestInRequests_driver($driverID,$requestID,$acceptOrReject,$this);
+	// deactivate driver 
+	$activeBool = '0';
+	$locationString = '-1';
+	Driver::activateDriver($email,$activeBool,$locationString,$this);
 	return returnSuccessResponse($this);
 	}
-	
+	else if ($driverAcceptedRequestID == $driverID){
+		$data=array('status' => '0', 'message' => 'you have already accepted this request');
+		return $response->withJson($data,400);
+		
+	}
 	else if ($driverAcceptedRequestID != $driverID){
 		
 		$data=array('status' => '3', 'error_msg' => 'Request has been accepted by another driver');
@@ -539,15 +570,22 @@ $app->post('/driver_api/active/', function($request, $response, $args){
 	
 	
 	Driver::activateDriver ($email,$data['active'] ,$data['location'],$this);
-	
+	return returnSuccessResponse($this);
 	
 });
 
 $app->post('/driver_api/status/', function($request, $response, $args){
-	// auth 
+	
 	$data=$request->getParsedBody();
-	//$data['status']
-	//$data['request_id']
+	
+	$ExpectedParametersArray = array ('status','request_id');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	
 
 });
 
@@ -556,13 +594,50 @@ $app->post('/driver_api/status/', function($request, $response, $args){
 $app->get('/driver_api/cancel/', function($request, $response, $args){
 	$data=$request->getQueryParams();
 	//$data['request_id']
+	
+	
+	$ExpectedParametersArray = array ('request_id');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	global $userInfo;
+	$email= $userInfo['email'];
+	$tableName='drivers';
+
+	$driverID = User::getUserID($email,$tableName,$this);
+	//echo $driverID;
+	$requestID=$data['request_id'];
+	//echo "\n";
+	//echo $requestID;
+	Driver::cancelRequestInRequestsTable ($requestID,$this);
+	Driver::cancelRequestInRequests_DriverTable ($requestID,$driverID,$this);
+	return returnSuccessResponse($this);
+	
 });
 
 $app->post('/driver_api/location/', function($request, $response, $args){
 	// auth 
+	
+	global $userInfo;
+	$email= $userInfo['email'];
+	
+	
 	$data=$request->getParsedBody();
-	//$data['request_id']
-	//$data['location']
+	
+	
+	$ExpectedParametersArray = array ('request_id','location');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$LocationString = $data['location'];
+	//echo $LocationString;
+	Driver::updateDriverLocationInDriversTable ($email,$LocationString,$this);
+	return returnSuccessResponse($this);
+	
 });
 
 
@@ -575,51 +650,9 @@ $app->post('/driver_api/testpsh/', function($request, $response, $args){
 });
 
 $app->get('/driver_api/testpush/', function($request, $response, $args){
-  $apiKey = "AIzaSyAJAYksJUwHGCR2RC7WLatF7mb5Ow_08lM";
-
-    // Replace with the real client registration IDs
-    $registrationIDs = array("eRurufTwDO8:APA91bHVAVK-iVO9IRLoDYnb-nEoKheSJRISmg56-Vbrk_vmkMe1-CTJOxwDxEoTwMi42j4G86VJXzRxEDONJ8F43XGWnFzg9J-i5Xa6qfaI2Fo2zTjEN9z0k3Nf0PZQCHjfm7JOT88L");
-
-    // Message to be sent
-    $message = "driver canceled the trip";
-
-    // Set POST variables
-    $url = 'https://android.googleapis.com/gcm/send';
-
-    $fields = array(
-        'registration_ids' => $registrationIDs,
-        'notification' => array( "body" => $message , "title" => "Uber", "icon" => "appicon"  ),
-    );
-    $headers = array(
-        'Authorization: key=' . $apiKey,
-        'Content-Type: application/json'
-    );
-
-    // Open connection
-    $ch = curl_init();
-
-    // Set the URL, number of POST vars, POST data
-    curl_setopt( $ch, CURLOPT_URL, $url);
-    curl_setopt( $ch, CURLOPT_POST, true);
-    curl_setopt( $ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true);
-    //curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $fields));
-
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    // curl_setopt($ch, CURLOPT_POST, true);
-    // curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode( $fields));
-
-    // Execute post
-    $result = curl_exec($ch);
-
-    // Close connection
-    curl_close($ch);
-    // print the result if you really need to print else neglate thi
-    echo $result;
-    //print_r($result);
-    //var_dump($result);
-
+  $registrationID = "eRurufTwDO8:APA91bHVAVK-iVO9IRLoDYnb-nEoKheSJRISmg56-Vbrk_vmkMe1-CTJOxwDxEoTwMi42j4G86VJXzRxEDONJ8F43XGWnFzg9J-i5Xa6qfaI2Fo2zTjEN9z0k3Nf0PZQCHjfm7JOT88L";
+  $data= array ('message' => ' you made it');
+  Firebase::sendData($data,$registrationID);
 
 });
 

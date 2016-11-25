@@ -46,41 +46,19 @@ class Request{
 	}
 	
 	
-	public static function setRequestStatusInRequest_DriverTable($requestID,$driverID = null ,$oldStatus = null ,$newStatus,$App){
+	public static function setRequestStatusInRequest_DriverTable($requestID,$driverID ,$newStatus,$App){
 		
-		// set the default values 
-		if (null === $driverID) {
-        $driverID = "all";
-		}
 
-		if (null === $oldStatus) {
-        $oldStatus = "all";
-		}
+		$setStatusSql = " UPDATE request_driver SET `status`=  :newStatus
+		WHERE requestID = :requestID 
+		AND driverID = :driverID ";
 		
-		$setStatusSql = " UPDATE request_driver SET `status`=  :newStatus  WHERE requestID = :requestID ";
-		
-		if ($driverID != 'all' ) 
-		{
-		 $setStatusSql 	= $setStatusSql . " AND driverID = :driverID ";
-		}
-		
-		if ($oldStatus != 'all' ) 
-		{
-		 $setStatusSql 	= $setStatusSql . " AND `status` = :oldStatus ";
-		}	
+	
 		//echo $setStatusSql;
 		$setRequestStatusStatement= $App->db->prepare($setStatusSql);
 		$setRequestStatusStatement->bindParam(":requestID",$requestID,PDO::PARAM_INT);
 		$setRequestStatusStatement->bindParam(":newStatus",$newStatus,PDO::PARAM_STR);
-		if ($driverID != 'all' ) 
-		{
-		 $setRequestStatusStatement->bindParam(":driverID",$driverID,PDO::PARAM_INT);
-		}
-		
-		if ($oldStatus != 'all' ) 
-		{
-		 $setRequestStatusStatement->bindParam(":oldStatus",$oldStatus,PDO::PARAM_STR);
-		}
+		$setRequestStatusStatement->bindParam(":driverID",$driverID,PDO::PARAM_INT);
 		
 		$setRequestStatusStatement->execute();
 			}
@@ -97,11 +75,26 @@ class Request{
 	}
 	
 	public static function isRequestCanceledInRequestsTable($requestID,$App){
-		
+		$status = Request::getRequestStatusInRequestsTable($requestID,$App);
+		   if ($status == 'canceled' )
+		   {
+			   return 1;
+		   }
+		   
+		   else 
+			   return 0;
 		
 	}
 	
-	public static function isRequestAccepted($requestID,$App){
+	public static function isRequestAcceptedInRequestsTable($requestID,$App){
+		$status = Request::getRequestStatusInRequestsTable($requestID,$App);
+		   if ($status == 'accepted' )
+		   {
+			   return 1;
+		   }
+		   
+		   else 
+			   return 0;
 		
 		
 	}

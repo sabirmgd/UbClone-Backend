@@ -70,7 +70,8 @@ class Driver {
 	 $getDriverIdStatement = $App->db->prepare($getDriverIdSql);
 	 $getDriverIdStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
 	 $getDriverIdStatement->execute();
-	 $driverID=$getDriverIdStatement->fetch()['driverID'];
+	 $row=$getDriverIdStatement->fetch();
+	 $driverID = $row['driverID'];
 	 return $driverID;
 	}
 	

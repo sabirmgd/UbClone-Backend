@@ -36,7 +36,7 @@ require __DIR__ . '/../src/routes.php';
 $pdo = $app->getContainer()->get('db');
 
 $app->add(new \Slim\Middleware\HttpBasicAuthentication([
-    "path" => ["/passenger_api/login/","/passenger_api/email_verification/","/passenger_api/driver/","/passenger_api/requests/","/passenger_api/cancel/","/passenger_api/arrived/"],
+    "path" => ["/passenger_api/login/","/passenger_api/email_verification/","/passenger_api/driver/","/passenger_api/requests/","/passenger_api/cancel/","/passenger_api/arrived/","/passenger_api/token/"],
     "secure" => false,
     "authenticator" => new \Slim\Middleware\HttpBasicAuthentication\PdoAuthenticator([
         "pdo" => $pdo,

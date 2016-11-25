@@ -53,27 +53,37 @@ class Passenger extends User {
 	
 	public static function doesPassengerHavePendingOrAcceptedRequest($passengerID,$App)
 	{
-		$getStatusOfPendingOrAcceptedRequestsSql="SELECT `ID` FROM `requests` WHERE 
+		$getStatusOfPendingOrAcceptedRequestsSql="SELECT COUNT(*),ID,status FROM `requests` WHERE 
 		`passengerID`=" .$passengerID . " AND
 		`status` IN ('pending','accepted') ";
 	
 		$getStatusOfPendingOrAcceptedRequestsSqlStatement = $App->db->prepare($getStatusOfPendingOrAcceptedRequestsSql);
 		
 		$getStatusOfPendingOrAcceptedRequestsSqlStatement->execute();
-		$number_of_rows = (int) $getStatusOfPendingOrAcceptedRequestsSqlStatement->fetchColumn(); 
-		if ( $number_of_rows == 0)
+		$resultRow =  $getStatusOfPendingOrAcceptedRequestsSqlStatement->fetch();
+		//var_dump( $resultRow);
+		 $number_of_rows = $resultRow["COUNT(*)"]; 
+		$ID = $resultRow['ID'];
+		$status = $resultRow['status'];
+		
+		if ( $number_of_rows == "0")
 		{
-			return (array ('status' => '0', 'no' => $number_of_rows));
+			return (array ('status' => '0'));
 		}
 		else {
-			
+			//, 'status' => $status
 
-			return (array('status' => '1' , 'ID' => $number_of_rows));
+			return (array('status' => '1' , 'ID' => $ID , 'rideStatus' => $status));
 		}
 		// if no pending or accepted request, return 0
 		// if yes, return the status 
 		
+		
+		
 	}
+	
+	
+	
 }
 		
 	

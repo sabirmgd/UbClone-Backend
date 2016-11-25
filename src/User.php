@@ -114,10 +114,67 @@ class User
 		}
 	
 			}
+			
+	public static function updateRegistrationToken ($email,$tableName,$GCMID,$App)	{
+		
+		
+	$updateTokenSql = " UPDATE " .$tableName . " SET GCMID =  :GCMID  WHERE email = :email " ;
+	//echo $updateTokenSql;
+	$updateTokenStatement = $App->db->prepare($updateTokenSql);
+	$updateTokenStatement->bindParam(":GCMID",$GCMID,PDO::PARAM_STR);
+	$updateTokenStatement->bindParam(":email",$email,PDO::PARAM_STR);
+	$updateTokenStatement->execute();
+		
+	}	
+	
+	public static function getRegistrationTokenUsingEmail ($email,$tableName,$App)	{
+		
+		
+	$getTokenSql = " SELECT GCMID FROM  $tableName WHERE email=? " ;
+	//echo $getTokenSql;
+	$getTokenStatement = $App->db->prepare($getTokenSql);
+	$getTokenStatement->execute(array($email));
+	$GCMID = $getTokenStatement->fetch()['GCMID'];
+	return $GCMID;
+	}	
+
+	
+	public static function getRegistrationTokenUsingID ($ID,$tableName,$App)	{
+		
+		
+	$getTokenSql = " SELECT GCMID FROM  $tableName WHERE ID=? " ;
+	//echo $getTokenSql;
+	$getTokenStatement = $App->db->prepare($getTokenSql);
+	$getTokenStatement->execute(array($ID));
+	$GCMID = $getTokenStatement->fetch()['GCMID'];
+	return $GCMID;
+	}	
+	
+	public static function getValueOftheKey ($key,$App) 
+	{
+
+
+	$getValueSql= " SELECT _value FROM `configuration` WHERE _key = ? " ;
+	$getValueStatement = $App->db->prepare ($getValueSql);
+	$getValueStatement->execute(array ($key));
+	$result = $getValueStatement->fetch();
+	return $result["_value"];
+	} 
+	
+	
+	public static function getNamePhoneUsingEmail ($email,$tableName,$App){
+		$userStatement = $App->db->prepare("SELECT fullname, phone FROM $tableName WHERE email = ? ");
+		$userStatement->execute(array($email));
+
+	
+	$userRow = $userStatement->fetch();
+		return $userRow;
+		
+	}
+	
+	
 	
 }
-
-
 
 
 ?>

@@ -53,7 +53,7 @@ function filterRequestParameters ($data,$parametersArray)
 $app->post('/passenger_api/login/', function($request, $response, $args){
 
 	global $userInfo;
-      // echo $userInfo['email'];
+     $email = $userInfo['email'];
 	$data = $request->getParsedBody();
 	$ExpectedParametersArray = array ('registration_token');
 	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
@@ -61,8 +61,14 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	
 	$data = filterRequestParameters ($data,$ExpectedParametersArray);
-	echo $data['registration_token'];
-	$userStatement = $this->db->prepare('SELECT * FROM passengers WHERE email = ?');
+	
+	$tableName = 'passengers';
+	$GCMID = $data['registration_token'];
+	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
+	
+	$token= User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
+	//echo $token;
+	$userStatement = $this->db->prepare("SELECT * FROM passengers WHERE email = ?");
 	$userStatement->execute(array($userInfo['email']));
 
 	$data = ['status' => '0' ];
@@ -74,7 +80,18 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 	'phone' => $userRow['phone'],
 	'gender' => $userRow['gender'],
 	];
+	
 	$data['passenger'] = $passenger;
+	$data["on_going_request"]="";
+	
+	$passengerID= $userRow['ID'];
+	$doesPassengerHaveOldRequest = Passenger::doesPassengerHavePendingOrAcceptedRequest ($passengerID,$this) ;
+    // status 1 means yes he has 
+	 if ($doesPassengerHaveOldRequest ['status'] == '1'  ){
+		//$requestID =  $doesPassengerHaveOldRequest['ID'];
+		$status = $doesPassengerHaveOldRequest['rideStatus'];
+		$data["on_going_request"]=$status;		
+	}
 	$newResponse = $response->withJson($data, 200);
 
 	return $newResponse;
@@ -115,7 +132,7 @@ $app->post('/passenger_api/register/', function($request, $response, $args){
 	$randomCode = User::generateRandomCode (6);
 	
 	// send the user an email 
-	//send_mail($passenger['email'],$randomCode,'welcome to Uber');
+	send_mail($passenger['email'],$randomCode,'welcome to Uber');
 	//mail($passenger['email'], 'welcome to Uber', $randomCode);
 	// Insert new user:
 	$hash = password_hash($passenger['password'], PASSWORD_DEFAULT);
@@ -141,6 +158,7 @@ $app->post('/passenger_api/email_verification/', function($request, $response, $
 	change email verified to 1;
 	*/
 	global $userInfo;
+	
 	$data = $request->getParsedBody();
 	
 	$ExpectedParametersArray = array ('code');
@@ -152,33 +170,104 @@ $app->post('/passenger_api/email_verification/', function($request, $response, $
 	
 	
 	$email= $userInfo['email'];
-	$verificationCode=  filter_var($data['code'], FILTER_SANITIZE_STRING);
+	$verificationCodeSent=  filter_var($data['code'], FILTER_SANITIZE_STRING);
 	
 	// check if the user has already verified his account
-	$isVerifiedStatement = $this->db->prepare('SELECT verified FROM passengers WHERE email = ?');
-	//echo $userEmail;
+	$isVerifiedStatement = $this->db->prepare('SELECT verified,verificationCode FROM passengers WHERE email = ?');
+	//echo $email;
 	
 	
 	try {$isVerifiedStatement->execute(array($email));}
 	catch(PDOException $ex) {return returnDatabaseErrorResponse ($this,$ex);}
 	
-	$verificationStatus= $isVerifiedStatement->fetch()['verified'];
+	$resultRow = $isVerifiedStatement->fetch();
+	
+	$verificationStatus = $resultRow ['verified'];
 	if ($verificationStatus == 1)
 	{
 		$data= array( 'status' => '2' , 'error_msg' => 'User has already verified this account');
 		return $response->withJson($data, 202);
 	}
-	$data= array( 'status' => '0');
-	return $response->withJson($data, 200);
+	else 
+	{		//echo "\n";
+		$verificationCode = $resultRow['verificationCode'];
+		//echo $verificationCode;
+		
+		if ($verificationCode == $verificationCodeSent ){
+			$stmt=$this->db->prepare("UPDATE passengers SET verified = 1 WHERE email= ? ");
+			$stmt->execute(array($email));
+			$data= array( 'status' => '0');
+			return $response->withJson($data, 200);
+			
+			
+			
+		}
+		else 
+			{
+				$data= array( 'status' => '1' ,"error_msg" => "Authentication failure" );
+			return $response->withJson($data, 401);
+				
+				
+			}
+		
+		
+	}
 	
-	//else // if user hasn't verified his account, check the code with the generated code
-	//{
-		
-		
-		
-//	}
+	
 	
 });
+
+
+
+
+
+$app->post('/passenger_api/token/', function($request, $response, $args){
+
+	global $userInfo;
+	$email= $userInfo['email'];
+	$data=$request->getParsedBody();
+
+	$ExpectedParametersArray = array ('registration_token');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$tableName = 'passengers';
+	$GCMID = $data['registration_token'];
+	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
+	$data = array("status" => "0");
+	return $response->withJson($data, 200);
+	
+});
+
+$app->get('/time/', function($request, $response, $args){
+
+	$gtm = (gmdate("Y-m-d H:i:s", time())); 
+	$unix = strtotime ($gtm);
+	$data = array("time" => $unix);
+	return $response->withJson($data, 200);
+	
+});
+
+$app->get('/price/', function($request, $response, $args){
+	$perkmKey = "perkm";
+	$perkm = User::getValueOftheKey ($perkmKey ,$this) ;
+	$perminKey = "permin";
+	$permin = User::getValueOftheKey ($perminKey  ,$this) ;
+	
+	$minKey = "min";
+	$min = User::getValueOftheKey ($minKey  ,$this) ;
+	
+	$data = array("perkm" => $perkm , "permin" => $permin , "min" => $min );
+	return $response->withJson($data, 200);
+	
+});
+
+
+
+
+
+
 
 $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 
@@ -273,7 +362,8 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 
 	 if ($doesPassengerHaveOldRequest ['status'] == '1'  ){
 		$requestID =  $doesPassengerHaveOldRequest['ID'];
-		
+			//$status = $doesPassengerHaveOldRequest['rideStatus'];
+					//echo $statos;
 	}
 	if ( Request::isAnewRequest($requestID))
 	{ // does driver have a pending or accepted request
@@ -301,6 +391,25 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			// then add it to request_driver table with missed status 
 			
 			Request::insert_aRequestInRequests_DriverTable($requestID,$driverID,$this);
+			// send the notification to the guy,
+			$tableName = "drivers";
+			$GCMID = User::getRegistrationTokenUsingID ($driverID,$tableName,$this);
+			$passengerInfo = User::getNamePhoneUsingEmail ($email,"passengers",$this);
+			$firebaseData = array("status" => "0",
+			"request_id" => $requestID,
+			"pickup" => $Request['pickup'] ,
+			"pickup_text" => $Request['pickup'] ,
+			"dest" => $Request['dest'],
+			"dest_text" => $Request['dest'],
+			 "time " => $Request['time'],
+			 "notes" => $Request['notes'] , 
+			 "passenger_name" => $passengerInfo['fullname'],
+			 "passenger_phone" => $passengerInfo['phone']
+			
+			);
+			//var_dump($firebaseData);
+			
+			Firebase::sendData($firebaseData,$GCMID);
 			$data = array ('status' => '0', 'request_id' => $requestID );
 			return $response->withJson($data,200);
 		}
@@ -344,11 +453,34 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 	$requestID = $data['request_id'];
 	$status='canceled';
 	//Request::setRequestStatusInRequestsTable($requestID,$status,$this);
-	Passenger::cancelRequestInRequests($requestID,$this);
-	Passenger::cancelRequestInRequest_Driver($requestID,$this);
 	
+	
+	// check if there is a driver that accepted the request 
+	 $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+	if ($driverID == null)
+	{
+		Passenger::cancelRequestInRequests($requestID,$this);
+		Passenger::cancelRequestInRequest_Driver($requestID,$this);
+		//echo "no driver accepted";
+		$data = array ('status' => 'no driver');
+	return $response->withJson($data,200);
+	}
+	else { 
+	Passenger::cancelRequestInRequests($requestID,$this);
+		Passenger::cancelRequestInRequest_Driver($requestID,$this);
+	echo ' some nigga accepted ' ;// if there is a driver accepted the request
+		// get the driver GCM using his ID
+		$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
+		$firebaseData = array (
+	"status" => "1",
+	"request_id" => $requestID	
+	);
+	
+	 Firebase::sendData($firebaseData,$GCMID);
 	$data = array ('status' => '0');
 	return $response->withJson($data,200);
+	}
+	
 
 });
 
@@ -367,8 +499,17 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	}
 	
 	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
+	echo $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
 	Passenger::arrivedRequestInRequests($requestID,$this);
 	Passenger::arrivedRequestInRequests_driver($requestID,$this);
+	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
+	echo $GCMID;
+		$firebaseData = array (
+	"status" => "2",
+	"request_id" => $requestID	
+	);
+	
+	 Firebase::sendData($firebaseData,$GCMID);
 	$data = array ('status' => '0');
 	return $response->withJson($data,200);
 });

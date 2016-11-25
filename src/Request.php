@@ -155,11 +155,13 @@ class Request{
 	public static function getTime($time){ //either 'now' or a time 
 		if ($time == 'now')
 		{  
-			$date = date_create();
-			$time =	 date_format($date, 'Y-m-d H:i:s');
+			//$date = date_create();
+			//$time =	 date_format($date, 'Y-m-d H:i:s');
+			$time = (gmdate("Y-m-d H:i:s", time()));
+			return $time;
 		}
 		else {
-			$time = date('Y-m-d H:i:s', $time);
+			return $time = date('Y-m-d H:i:s', $time);
 			}
 	}
 	

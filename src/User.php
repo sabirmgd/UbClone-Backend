@@ -2,6 +2,8 @@
 
 class User 
 {
+	
+	// define setters and getters
 	public $id;
 	public $name; 
 	public $type; 
@@ -64,9 +66,9 @@ class User
 			$mail->SMTPAuth = true;                               // Enable SMTP authentication
 			$mail->Username='sabirmgd@gmail.com';  
 			$mail->Password='kooora.com100plusfuck';                         // SMTP password
-			$mail->SMTPSecure = 'ssl';                            // Enable TLS encryption, `ssl` also accepted
-			$mail->Port = 465;                                    // TCP port to connect to
-			$mail->SetFrom('sabirmgd@gmail.com','Uber');
+			$mail->SMTPSecure = 'tls';                            // Enable TLS encryption, `ssl` also accepted
+			$mail->Port = 587;                                    // TCP port to connect to
+			$mail->SetFrom('sabirmgd@gmail.com',"Uber");
 			$mail->AddReplyTo('sabirmgd@gmail.com',"Uber");
 			$mail->Subject    = $subject;
 			$mail->MsgHTML($message);
@@ -74,7 +76,13 @@ class User
 			$mail->isHTML(true);                                  // Set email format to HTML
 			$mail->Subject= $subject;
 			$mail->MsgHTML($message);
-
+			$mail->SMTPOptions = array(
+			'ssl' => array(
+			'verify_peer' => false,
+			'verify_peer_name' => false,
+			'allow_self_signed' => true
+			)
+			);
 			if(!$mail->send()) {
 				echo 'Message could not be sent.';
 				echo 'Mailer Error: ' . $mail->ErrorInfo;
@@ -83,9 +91,6 @@ class User
 				}
 		}
 	 
-	// make the constructer
-	
-	//
 	public static function  generateRandomCode($length, $keyspace = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
 {
     $str = '';
@@ -95,22 +100,7 @@ class User
     }
     return $str;
 }
-		/*
-	public static function getUserID($userEmail,$App,$userType){
-	//getPassengerID
-	// userType is tha table name ie drivers,passengers
-		$getUserIDSql = "SELECT ID FROM  $userType WHERE email=?";
-		$getUserIDStatement = $App->db->prepare($getUserIDSql);
-		try{
-			$getUserIDStatement->execute(array($userEmail));
-			$userID= $getUserIDStatement->fetch()['ID'];
-			return $userID;
-		}catch (PDOException $ex){
-			return $ex->getMessage();
-		}
 	
-			}	
-	*/
 	public static function getUserID($email,$tableName,$App){
 
 	$getUserIDSql = "SELECT ID FROM  $tableName WHERE email=?";

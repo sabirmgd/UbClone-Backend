@@ -618,6 +618,20 @@ $app->get('/driver_api/testpush/', function($request, $response, $args){
 
 });
 
+
+
+$app->post('/driver_api/sendemail/', function($request, $response, $args){
+	$email = "sabirmgd@gmail.com"; 
+	$code = "123123123";
+	$message= "welcome  to Uber";
+	User::send_mail($email,$code,$message);
+	
+	
+	
+});
+
+
+
 ?>
 
 

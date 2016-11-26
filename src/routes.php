@@ -25,7 +25,7 @@ function returnMissingParameterDataResponse($App)
 
 function returnDatabaseErrorResponse ($App,$error)
 {
-	$data = array('status' => '1', 'error_msg' => $error );
+	$data = array('status' => '2', 'error_msg' => "Unknown error occurred" );
 	return $App->response->withJson($data, 500);
 }
 
@@ -75,13 +75,13 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 
 	$userRow = $userStatement->fetch();
 	$passenger = [
-	'name' => $userRow['fullname'],
+	'fullname' => $userRow['fullname'],
 	'email' => $userRow['email'],
 	'phone' => $userRow['phone'],
 	'gender' => $userRow['gender'],
 	];
 	
-	$data['passenger'] = $passenger;
+	$data['user'] = $passenger;
 	$data["on_going_request"]="";
 	
 	$passengerID= $userRow['ID'];
@@ -114,7 +114,7 @@ $app->post('/passenger_api/register/', function($request, $response, $args){
 	$passengerStatement->execute(array($passenger['email']));
 	$numberOfRows = $passengerStatement->fetchColumn(); 
 	if ($numberOfRows != 0) {
-		$data = array('status' => '2', 'error_msg' => 'User already exist with this email');
+		$data = array('status' => '3', 'error_msg' => 'User already exist with this email');
 		return $response->withJson($data, 200);
 	}
 
@@ -123,7 +123,7 @@ $app->post('/passenger_api/register/', function($request, $response, $args){
 	$phoneStatement->execute(array($passenger['phone']));
 	$numberOfRows = $phoneStatement->fetchColumn(); 
 	if ($numberOfRows != 0) {
-		$data = array('status' => '3', 'error_msg' => 'User already exist with this phone number');
+		$data = array('status' => '4', 'error_msg' => 'User already exist with this phone number');
 		return $response->withJson($data, 200);
 	}
 
@@ -166,9 +166,6 @@ $app->post('/passenger_api/email_verification/', function($request, $response, $
 	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	$data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
-	
-	
-	
 	$email= $userInfo['email'];
 	$verificationCodeSent=  filter_var($data['code'], FILTER_SANITIZE_STRING);
 	
@@ -185,7 +182,7 @@ $app->post('/passenger_api/email_verification/', function($request, $response, $
 	$verificationStatus = $resultRow ['verified'];
 	if ($verificationStatus == 1)
 	{
-		$data= array( 'status' => '2' , 'error_msg' => 'User has already verified this account');
+		$data= array( 'status' => '3' , 'error_msg' => 'User has already verified this account');
 		return $response->withJson($data, 202);
 	}
 	else 
@@ -216,56 +213,6 @@ $app->post('/passenger_api/email_verification/', function($request, $response, $
 	
 	
 });
-
-
-
-
-
-$app->post('/passenger_api/token/', function($request, $response, $args){
-
-	global $userInfo;
-	$email= $userInfo['email'];
-	$data=$request->getParsedBody();
-
-	$ExpectedParametersArray = array ('registration_token');
-	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
-	if (!$areSet){return returnMissingParameterDataResponse($this);}
-	$data = filterRequestParameters ($data,$ExpectedParametersArray);
-	
-	$tableName = 'passengers';
-	$GCMID = $data['registration_token'];
-	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
-	$data = array("status" => "0");
-	return $response->withJson($data, 200);
-	
-});
-
-$app->get('/time/', function($request, $response, $args){
-
-	$gtm = (gmdate("Y-m-d H:i:s", time())); 
-	$unix = strtotime ($gtm);
-	$data = array("time" => $unix);
-	return $response->withJson($data, 200);
-	
-});
-
-$app->get('/price/', function($request, $response, $args){
-	$perkmKey = "perkm";
-	$perkm = User::getValueOftheKey ($perkmKey ,$this) ;
-	$perminKey = "permin";
-	$permin = User::getValueOftheKey ($perminKey  ,$this) ;
-	
-	$minKey = "min";
-	$min = User::getValueOftheKey ($minKey  ,$this) ;
-	
-	$data = array("perkm" => $perkm , "permin" => $permin , "min" => $min );
-	return $response->withJson($data, 200);
-	
-});
-
-
-
-
 
 
 
@@ -316,7 +263,7 @@ $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 	{
 		$longitude= $row['longitude'];
 		$latitude= $row['latitude'];
-		$driver = $longitude . ',' . $latitude;
+		$driver = array("lat" =>  $latitude , "lng" => $longitude ) ;
 		
 		
 		array_push($drivers, $driver);
@@ -327,6 +274,13 @@ $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 	return $response->withJson($data, 200);
 	
 });
+
+
+
+
+
+
+
 
 $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	 
@@ -353,7 +307,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	list($pickupLongitude,$pickupLatitude) = explode(',',$Request['pickup']);
 	list($destinationLatitude,$destinationLongitude) = explode(',',$Request['dest']);
 	$time=Request::getTime ($Request['time']);
-	$lastUpdatedMinute = 1000;
+	$lastUpdatedMinute = 5;
 	$genderBool= $Request['female_driver'];
 	
 	// if the passenger already has a pending or accepted request, return its id 
@@ -383,7 +337,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			{
 				$status='noDriver';
 				Request::setRequestStatusInRequestsTable($requestID,$status,$this);
-				$data = array ('status' => '3', 'error_msg' => 'it seems like drivers are not available not, please try again shortly' );
+				$data = array ('status' => '3', 'error_msg' => 'No driver found' );
 				return $response->withJson($data,200);
 			}
 			
@@ -427,7 +381,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			
 });
 
-$app->post('/passenger_api/requests/', function($request, $response, $args){
+$app->get('/passenger_api/requests/', function($request, $response, $args){
 
 	global $userInfo;
 	$email= $userInfo['email'];
@@ -489,7 +443,7 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	
 	if (! isset ($data['request_id']))
 	{
-		$data = array('status' => '4', 'error_msg' => 'Invalid request');
+		$data = array('status' => '2', 'error_msg' => '"Unknown error occurred');
 		return $response->withJson($data, 400);
 	}
 	
@@ -511,6 +465,51 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	
 	
 });
+
+
+
+$app->post('/passenger_api/token/', function($request, $response, $args){
+
+	global $userInfo;
+	$email= $userInfo['email'];
+	$data=$request->getParsedBody();
+
+	$ExpectedParametersArray = array ('registration_token');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$tableName = 'passengers';
+	$GCMID = $data['registration_token'];
+	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
+	$data = array("status" => "0");
+	return $response->withJson($data, 200);
+	
+});
+
+$app->get('/time/', function($request, $response, $args){
+
+	$gtm = (gmdate("Y-m-d H:i:s", time())); 
+	$unix = strtotime ($gtm);
+	$data = array("time" => $unix);
+	return $response->withJson($data, 200);
+	
+});
+
+$app->get('/price/', function($request, $response, $args){
+	$perkmKey = "perkm";
+	$perkm = User::getValueOftheKey ($perkmKey ,$this) ;
+	$perminKey = "permin";
+	$permin = User::getValueOftheKey ($perminKey  ,$this) ;
+	
+	$minKey = "min";
+	$min = User::getValueOftheKey ($minKey  ,$this) ;
+	
+	$data = array("perkm" => $perkm , "permin" => $permin , "min" => $min );
+	return $response->withJson($data, 200);
+	
+});
+
 
 
 $app->post('/driver_api/register/', function($request, $response, $args){
@@ -597,12 +596,12 @@ $app->post('/driver_api/login/', function($request, $response, $args){
 
 	$userRow = $userStatement->fetch();
 	$driver = [
-	'name' => $userRow['fullname'],
+	'fullname' => $userRow['fullname'],
 	'email' => $userRow['email'],
 	'phone' => $userRow['phone'],
 	'gender' => $userRow['gender'],
 	];
-	$data['driver'] = $driver;
+	$data['user'] = $driver;
 	$newResponse = $response->withJson($data, 200);
 
 	return $newResponse; 
@@ -632,6 +631,7 @@ $app->post('/driver_api/requests/', function($request, $response, $args){
 		return $response->withJson($data,500);
 	}
 	
+	//
 	$data = array('status' => '0', 'rides' => []);
 	$rides = [];
 	while ($requestRow =  $getRidesStatement->fetch())

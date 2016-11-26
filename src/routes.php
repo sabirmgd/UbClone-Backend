@@ -468,20 +468,15 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 	else { 
 	Passenger::cancelRequestInRequests($requestID,$this);
 		Passenger::cancelRequestInRequest_Driver($requestID,$this);
-	echo ' some nigga accepted ' ;// if there is a driver accepted the request
+	//echo ' some nigga accepted ' ;// if there is a driver accepted the request
 		// get the driver GCM using his ID
-		$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
-		$firebaseData = array (
-	"status" => "1",
-	"request_id" => $requestID	
-	);
+	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
+	$firebaseData = array ("status" => "1","request_id" => $requestID);
+	Firebase::sendData($firebaseData,$GCMID);
 	
-	 Firebase::sendData($firebaseData,$GCMID);
 	$data = array ('status' => '0');
 	return $response->withJson($data,200);
 	}
-	
-
 });
 
 // 
@@ -499,30 +494,24 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	}
 	
 	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
-	echo $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+	 $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+	var_dump( $driverID);
 	Passenger::arrivedRequestInRequests($requestID,$this);
 	Passenger::arrivedRequestInRequests_driver($requestID,$this);
+	
 	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
-	echo $GCMID;
-		$firebaseData = array (
-	"status" => "2",
-	"request_id" => $requestID	
-	);
+	var_dump($GCMID);
+	$firebaseData = array ("status" => "2","request_id" => $requestID);
+	Firebase::sendData($firebaseData,$GCMID);
 	
-	 Firebase::sendData($firebaseData,$GCMID);
-	$data = array ('status' => '0');
-	return $response->withJson($data,200);
-});
-
-$app->get('/time', function($request, $response, $args){
-	// to be added by Islam 
+	$activeBool = '1';
+	$locationString = '-1';
+	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
+	return returnSuccessResponse($this);
+	
 	
 });
 
-$app->get('/price', function($request, $response, $args){
-	
-	
-});
 
 $app->post('/driver_api/register/', function($request, $response, $args){
 	
@@ -586,8 +575,21 @@ $app->post('/driver_api/register/', function($request, $response, $args){
 $app->post('/driver_api/login/', function($request, $response, $args){
 	// auth 
 	global $userInfo;
-       //echo $userInfo['email'];
-
+    $email = $userInfo['email'];
+	$data = $request->getParsedBody();
+	$ExpectedParametersArray = array ('registration_token');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$tableName = 'drivers';
+	$GCMID = $data['registration_token'];
+	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
+	
+	$token= User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
+	//echo "\n $token";
 	$userStatement = $this->db->prepare('SELECT * FROM drivers WHERE email = ?');
 	$userStatement->execute(array($userInfo['email']));
 
@@ -667,31 +669,62 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 	$tableName='drivers';
 
 	$driverID = User::getUserID($email,$tableName,$this);
-	//$driverID,$requestID,$acceptOrReject,$this
-	
-	$driverAcceptedRequestID=Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
-	echo $driverAcceptedRequestID;
-	if ($driverAcceptedRequestID == null )
+	$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
+	//var_dump($PassengerId);
+	$GCMID = User::getRegistrationTokenUsingID ($PassengerId,"passengers",$this);
+	//var_dump($GCMID);
+	// check if there is another driver accepted this request
+	if ($acceptOrReject == "1"	)
+	{	
+		$driverAcceptedRequestID=Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+		// if there is no driver accepted, insert into the database and inform the passenger
+		if ($driverAcceptedRequestID == null ) // if 
+		{
+			
+			// inform the passenger, firebase code 
+			
+			//echo $PassengerId;
+			
+			
+			$driverRow = User::getNamePhoneUsingEmail ($email,"drivers",$this);
+			$firebaseData = array(
+			"status" => "1",
+			"name" => $driverRow['fullname'] ,			
+			"phone" => $driverRow['phone'],
+			"vehicle" => "",  
+			"plate" => ""  , 
+			"request_id" => $requestID );
+			Firebase::sendData($firebaseData,$GCMID);
+			Driver::acceptRequestInRequests($requestID,$driverID,$this);
+			Driver::acceptRequestInRequests_driver($driverID,$requestID,$this);
+			$activeBool = '0';
+			$locationString = '-1';
+			Driver::activateDriver($email,$activeBool,$locationString,$this);
+			return returnSuccessResponse($this);
+		}
+		else if ($driverAcceptedRequestID == $driverID)
+		{
+			$data=array('status' => '0', 'message' => 'you have already accepted this request');
+			return $response->withJson($data,400);
+		}	
+		else if ($driverAcceptedRequestID != $driverID)
+		{
+			$data=array('status' => '3', 'error_msg' => 'Request has been accepted by another driver');
+			return $response->withJson($data,400);
+		}	
+	}
+	else if ($acceptOrReject == "0")
 	{
-	Driver::acceptOrRejecctRequestInRequests($requestID,$driverID,$acceptOrReject,$this);
-	Driver::acceptOrRejectRequestInRequests_driver($driverID,$requestID,$acceptOrReject,$this);
-	// deactivate driver 
-	$activeBool = '0';
-	$locationString = '-1';
-	Driver::activateDriver($email,$activeBool,$locationString,$this);
-	return returnSuccessResponse($this);
+		$firebaseData = array(
+			"status" => "0",
+			"request_id" => $requestID );
+			Firebase::sendData($firebaseData,$GCMID);
+
 	}
-	else if ($driverAcceptedRequestID == $driverID){
-		$data=array('status' => '0', 'message' => 'you have already accepted this request');
-		return $response->withJson($data,400);
-		
-	}
-	else if ($driverAcceptedRequestID != $driverID){
-		
-		$data=array('status' => '3', 'error_msg' => 'Request has been accepted by another driver');
-		return $response->withJson($data,400);
-		
-	}
+	
+
+	
+	
 });
 
 $app->post('/driver_api/active/', function($request, $response, $args){
@@ -715,20 +748,6 @@ $app->post('/driver_api/active/', function($request, $response, $args){
 	
 });
 
-$app->post('/driver_api/status/', function($request, $response, $args){
-	
-	$data=$request->getParsedBody();
-	
-	$ExpectedParametersArray = array ('status','request_id');
-	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
-	
-	if (!$areSet){return returnMissingParameterDataResponse($this);}
-	
-	$data = filterRequestParameters ($data,$ExpectedParametersArray);
-	
-	
-
-});
 
 
 
@@ -748,12 +767,19 @@ $app->get('/driver_api/cancel/', function($request, $response, $args){
 	$tableName='drivers';
 
 	$driverID = User::getUserID($email,$tableName,$this);
-	//echo $driverID;
 	$requestID=$data['request_id'];
-	//echo "\n";
-	//echo $requestID;
+	
 	Driver::cancelRequestInRequestsTable ($requestID,$this);
 	Driver::cancelRequestInRequests_DriverTable ($requestID,$driverID,$this);
+	
+	$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
+	$GCMID = User::getRegistrationTokenUsingID ($PassengerId,"passengers",$this);
+		
+	$firebaseData = array ("status" => "4",
+	"request_id" => $requestID);
+	Firebase::sendData($firebaseData,$GCMID);
+	
+	
 	return returnSuccessResponse($this);
 	
 });
@@ -774,14 +800,74 @@ $app->post('/driver_api/location/', function($request, $response, $args){
 	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	$data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
+	$requestID = $data['request_id'];
 	$LocationString = $data['location'];
+	
 	//echo $LocationString;
 	Driver::updateDriverLocationInDriversTable ($email,$LocationString,$this);
+	if ( $requestID != '-1') // send the location to the passenger
+	{
+		$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
+		$GCMID = User::getRegistrationTokenUsingID ($PassengerId,"passengers",$this);
+		
+		$firebaseData = array ("status" => "2",
+		"location" => $LocationString ,
+		"request_id" => $requestID);
+		 Firebase::sendData($firebaseData,$GCMID);
+		
+	}
 	return returnSuccessResponse($this);
 	
 });
 
 
+$app->post('/driver_api/status/', function($request, $response, $args){
+
+	global $userInfo;
+	$email= $userInfo['email'];
+	$data=$request->getParsedBody();
+
+	$ExpectedParametersArray = array ('status','request_id');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$status = $data ['status'];
+	$requestID = $data ['request_id'];
+	
+	$passengerID = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
+	$GCMID= User::getRegistrationTokenUsingID($passengerID,"passengers",$this);
+	
+	$firebaseData = array("status" => "3", "message" => $status);
+	Firebase::sendData($firebaseData,$GCMID);
+	
+	$data = array("status" => "0");
+	return $response->withJson($data, 200);
+	
+});
+
+
+
+
+
+$app->post('/driver_api/token/', function($request, $response, $args){
+
+	global $userInfo;
+	$email= $userInfo['email'];
+	$data=$request->getParsedBody();
+
+	$ExpectedParametersArray = array ('registration_token');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$tableName = 'drivers';
+	$GCMID = $data['registration_token'];
+	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
+	$data = array("status" => "0");
+	return $response->withJson($data, 200);
+	
+});
 $app->post('/driver_api/testpsh/', function($request, $response, $args){
 	// auth 
 	//$data=$request->getParsedBody();

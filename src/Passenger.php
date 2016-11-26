@@ -81,7 +81,14 @@ class Passenger extends User {
 		
 		
 	}
-	
+	public static function getPassengerID_whoMadeRequest($requestID,$App)
+	{
+		$getIdSql = "SELECT PassengerID FROM requests WHERE ID = ?";
+		$getSqlStatement = $App->db->prepare($getIdSql);
+		$getSqlStatement->execute(array($requestID));
+		$result = $getSqlStatement->fetch();
+		return $result['PassengerID'];
+	}
 	
 	
 }

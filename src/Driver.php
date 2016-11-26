@@ -17,42 +17,27 @@ class Driver {
 		$setDriverIDinRequestsStatement->bindParam(':driverID',$driverID,PDO::PARAM_INT);
 		$setDriverIDinRequestsStatement->execute();
 	}
-	public static function acceptOrRejecctRequestInRequests($requestID,$driverID,$acceptOrReject,$App){
-	if ($acceptOrReject == '1' )
-	{
+	public static function acceptRequestInRequests($requestID,$driverID,$App){
 	$status = 'accepted';
 	Request::setRequestStatusInRequestsTable($requestID,$status,$App);
 	Driver::setDriverIDinRequests($requestID,$driverID,$App);
-	
-	}
-	else if (acceptOrReject == '0'){
-	$status = 'missed';}
 	}
 	
 	// by driver
-	public static function acceptOrRejectRequestInRequests_driver($driverID,$requestID,$acceptOrReject,$App){
+	public static function acceptRequestInRequests_driver($driverID,$requestID,$App){
 	
-	if ($acceptOrReject == '1' )
-	{
-		$status = 'accepted';
-	}
-	else if ($acceptOrReject == '0')
-	{
-		$status = 'missed';
-		
-	}
-	
-	$acceptOrRejectRequestSql ="UPDATE `request_driver` 
+	$status = 'accepted';
+	$acceptRequestSql ="UPDATE `request_driver` 
 							   SET `status`=:status
 							   WHERE 
 						       requestID = :requestID
 						       AND driverID = :driverID";
-	$acceptOrRejectRequestStatement= $App->db->prepare($acceptOrRejectRequestSql);
-	$acceptOrRejectRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
-	$acceptOrRejectRequestStatement->bindParam(':driverID',$driverID,PDO::PARAM_INT);
-	$acceptOrRejectRequestStatement->bindParam(':status',$status,PDO::PARAM_STR);
+	$acceptRequestStatement= $App->db->prepare($acceptRequestSql);
+	$acceptRequestStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
+	$acceptRequestStatement->bindParam(':driverID',$driverID,PDO::PARAM_INT);
+	$acceptRequestStatement->bindParam(':status',$status,PDO::PARAM_STR);
 	try{
-		$acceptOrRejectRequestStatement->execute();
+		$acceptRequestStatement->execute();
 		return $status;
 	}catch(PDOException $ex)
 	{
@@ -66,7 +51,7 @@ class Driver {
 	 $getDriverIdSql=	"SELECT `driverID` FROM `request_driver` 
 						 WHERE 
 						 requestID = :requestID
-						 AND status = 'accepted' ";
+						 AND status IN ('accepted' , 'completed') ";
 	 $getDriverIdStatement = $App->db->prepare($getDriverIdSql);
 	 $getDriverIdStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
 	 $getDriverIdStatement->execute();
@@ -108,6 +93,20 @@ class Driver {
 		
 	}
 	
+	
+	public static function activateDriverAfterComletingTheTrip ($ID,$App){
+
+		$activateDriverSql = "UPDATE `drivers` SET 
+							 `active`= 1 ";
+
+		$IDSql = " WHERE `ID` = :ID " ;
+		$activateDriverSql = $activateDriverSql . $IDSql ;
+		$activateDriverStatement = $App->db->prepare($activateDriverSql);
+		$activateDriverStatement->bindParam(':ID',$ID,PDO::PARAM_STR);
+		$activateDriverStatement->execute();
+		
+	}
+	
 	public static function cancelRequestInRequestsTable ($requestID,$App){
 		$status='canceled';
 		Request::setRequestStatusInRequestsTable($requestID,$status,$App);
@@ -139,6 +138,8 @@ class Driver {
 	
 	}
 	
+	
+
 	
 }
 

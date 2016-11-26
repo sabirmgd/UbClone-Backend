@@ -309,6 +309,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	$time=Request::getTime ($Request['time']);
 	$lastUpdatedMinute = 5;
 	$genderBool= $Request['female_driver'];
+	$price =  $Request['price'];
 	
 	// if the passenger already has a pending or accepted request, return its id 
 	 
@@ -358,7 +359,8 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			 "time " => $Request['time'],
 			 "notes" => $Request['notes'] , 
 			 "passenger_name" => $passengerInfo['fullname'],
-			 "passenger_phone" => $passengerInfo['phone']
+			 "passenger_phone" => $passengerInfo['phone'],
+			 "price" =>  $price
 			
 			);
 			//var_dump($firebaseData);
@@ -631,7 +633,8 @@ $app->post('/driver_api/requests/', function($request, $response, $args){
 		return $response->withJson($data,500);
 	}
 	
-	//
+	//Passenger::getPassengerID_whoMadeRequest($requestID,$this)
+	//$passengerRow = User::getNamePhoneUsingEmail ($email,"passengers",$this);
 	$data = array('status' => '0', 'rides' => []);
 	$rides = [];
 	while ($requestRow =  $getRidesStatement->fetch())

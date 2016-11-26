@@ -645,6 +645,8 @@ $app->post('/driver_api/requests/', function($request, $response, $args){
 		$ride['time'] = $requestRow['requestTime'];
 		$ride['price'] = $requestRow['price'];
 		$ride['status'] = $requestRow['status'];
+		$ride['passenger_name'] =  "name" ;
+		$ride['passenger_phone'] = "0912300000" ;
 		array_push($rides,$ride);
 	}
 	$data = array('status' => '0', 'rides' => $rides);

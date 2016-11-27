@@ -172,6 +172,14 @@ class User
 		
 	}
 	
+	public static function Null_allGCMID_exceptLoggedInUser ($email,$GCMID,$tableName,$App)
+	{	
+	$NullSql = "UPDATE $tableName SET GCMID = NULL 
+			   WHERE email != ? AND
+			   GCMID  = ? " ;
+	$NullStatement = $App->db->prepare ($NullSql);
+	$NullStatement->execute(array ($email,$GCMID));	
+	}
 	
 	
 }

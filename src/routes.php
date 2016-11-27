@@ -65,7 +65,7 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 	$tableName = 'passengers';
 	$GCMID = $data['registration_token'];
 	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
-	
+	User::Null_allGCMID_exceptLoggedInUser ($email,$GCMID,$tableName,$this);
 	$token= User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
 	//echo $token;
 	$userStatement = $this->db->prepare("SELECT * FROM passengers WHERE email = ?");

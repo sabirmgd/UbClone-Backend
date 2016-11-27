@@ -53,7 +53,7 @@ function filterRequestParameters ($data,$parametersArray)
 $app->post('/passenger_api/login/', function($request, $response, $args){
 
 	global $userInfo;
-     $email = $userInfo['email'];
+    $email = $userInfo['email'];
 	$data = $request->getParsedBody();
 	$ExpectedParametersArray = array ('registration_token');
 	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
@@ -64,8 +64,16 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 	
 	$tableName = 'passengers';
 	$GCMID = $data['registration_token'];
+	
+	$oldGCMID = User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
+	
+	if ($GCMID != $oldGCMID)// means user logged in from another phone 
+	{	$firebaseData = array("status" => "5");
+		Firebase::sendData($firebaseData,$oldGCMID,"passenger");
+	}
 	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
 	User::Null_allGCMID_exceptLoggedInUser ($email,$GCMID,$tableName,$this);
+	
 	$token= User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
 	//echo $token;
 	$userStatement = $this->db->prepare("SELECT * FROM passengers WHERE email = ?");
@@ -587,8 +595,21 @@ $app->post('/driver_api/login/', function($request, $response, $args){
 	
 	$tableName = 'drivers';
 	$GCMID = $data['registration_token'];
-	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
 	
+	
+	
+	$oldGCMID = User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
+	
+	if ($GCMID != $oldGCMID)// means user logged in from another phone 
+	{	$firebaseData = array("status" => "3");
+		Firebase::sendData($firebaseData,$oldGCMID,"driver");
+	}
+	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
+	User::Null_allGCMID_exceptLoggedInUser ($email,$GCMID,$tableName,$this);
+	
+	
+	
+
 	$token= User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
 	//echo "\n $token";
 	$userStatement = $this->db->prepare('SELECT * FROM drivers WHERE email = ?');
@@ -690,14 +711,15 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 			
 			//echo $PassengerId;
 			
-			
+			$carInfo= Driver::getDriverVehicle_Plate($driverID,$this);
+	
 			$driverRow = User::getNamePhoneUsingEmail ($email,"drivers",$this);
 			$firebaseData = array(
 			"status" => "1",
 			"name" => $driverRow['fullname'] ,			
 			"phone" => $driverRow['phone'],
-			"vehicle" => "",  
-			"plate" => ""  , 
+			"vehicle" => $carInfo['model'],  
+			"plate" => $carInfo['plateNumber']  , 
 			"request_id" => $requestID );
 			Firebase::sendData($firebaseData,$GCMID,"passenger");
 			Driver::acceptRequestInRequests($requestID,$driverID,$this);
@@ -897,6 +919,20 @@ $app->post('/driver_api/sendemail/', function($request, $response, $args){
 	User::send_mail($email,$code,$message);
 	
 	
+	
+});
+$app->post('/driver_api/testplate/', function($request, $response, $args){
+	
+	
+	
+	global $userInfo;
+	$email= $userInfo['email'];
+	
+	$driverID = User::getUserID($email,'drivers',$this);
+	
+	$carInfo= Driver::getDriverVehicle_Plate($driverID,$this);
+	
+	var_dump($carInfo);
 	
 });
 

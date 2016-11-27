@@ -138,6 +138,18 @@ class Driver {
 	
 	}
 	
+	public static function getDriverVehicle_Plate($driverID,$App)
+	{
+		$Sql = "SELECT `model`,`plateNumber` FROM cars 
+				WHERE driverID = ? " ;
+		$statement = $App->db->prepare($Sql);
+		$statement->execute(array ($driverID));
+		$result = $statement->fetch();
+		return $result;
+		
+		
+	}
+	
 	
 
 	

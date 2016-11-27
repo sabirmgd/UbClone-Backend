@@ -2,10 +2,17 @@
 
 class Firebase{
 	
-	public static function sendData($data,$registrationID){
-	
+	public static function sendData($data,$registrationID,$to){
+	if ($to == 'driver')
+	{
+			$apiKey = "AIzaSyAzMqsMU9Lfu2Yx5Dc-JgSSgMrrqZdysQQ";
+	}
+	else 
+	{
+			$apiKey = "AIzaSyDUbsNrE7v_YlWQLE-2ZEQ3GO0WMZikAK4" ;
+	}
 	//"registration_token
-	$apiKey = "AIzaSyAJAYksJUwHGCR2RC7WLatF7mb5Ow_08lM";
+	//$apiKey = "AIzaSyAJAYksJUwHGCR2RC7WLatF7mb5Ow_08lM";
 	
     // Replace with the real client registration IDs
     $registrationIDs = array($registrationID);

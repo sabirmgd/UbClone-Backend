@@ -365,7 +365,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			);
 			//var_dump($firebaseData);
 			
-			Firebase::sendData($firebaseData,$GCMID);
+			Firebase::sendData($firebaseData,$GCMID,"driver");
 			$data = array ('status' => '0', 'request_id' => $requestID );
 			return $response->withJson($data,200);
 		}
@@ -418,17 +418,17 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 		Passenger::cancelRequestInRequests($requestID,$this);
 		Passenger::cancelRequestInRequest_Driver($requestID,$this);
 		//echo "no driver accepted";
-		$data = array ('status' => 'no driver');
+		$data = array ('status' => '0');
 	return $response->withJson($data,200);
 	}
 	else { 
 	Passenger::cancelRequestInRequests($requestID,$this);
-		Passenger::cancelRequestInRequest_Driver($requestID,$this);
+	Passenger::cancelRequestInRequest_Driver($requestID,$this);
 	//echo ' some nigga accepted ' ;// if there is a driver accepted the request
 		// get the driver GCM using his ID
 	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
 	$firebaseData = array ("status" => "1","request_id" => $requestID);
-	Firebase::sendData($firebaseData,$GCMID);
+	Firebase::sendData($firebaseData,$GCMID,"driver");
 	
 	$data = array ('status' => '0');
 	return $response->withJson($data,200);
@@ -458,7 +458,7 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
 	var_dump($GCMID);
 	$firebaseData = array ("status" => "2","request_id" => $requestID);
-	Firebase::sendData($firebaseData,$GCMID);
+	Firebase::sendData($firebaseData,$GCMID,"driver");
 	
 	$activeBool = '1';
 	$locationString = '-1';
@@ -699,7 +699,7 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 			"vehicle" => "",  
 			"plate" => ""  , 
 			"request_id" => $requestID );
-			Firebase::sendData($firebaseData,$GCMID);
+			Firebase::sendData($firebaseData,$GCMID,"passenger");
 			Driver::acceptRequestInRequests($requestID,$driverID,$this);
 			Driver::acceptRequestInRequests_driver($driverID,$requestID,$this);
 			$activeBool = '0';
@@ -723,7 +723,7 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 		$firebaseData = array(
 			"status" => "0",
 			"request_id" => $requestID );
-			Firebase::sendData($firebaseData,$GCMID);
+			Firebase::sendData($firebaseData,$GCMID,"passenger");
 
 	}
 	
@@ -782,7 +782,7 @@ $app->get('/driver_api/cancel/', function($request, $response, $args){
 		
 	$firebaseData = array ("status" => "4",
 	"request_id" => $requestID);
-	Firebase::sendData($firebaseData,$GCMID);
+	Firebase::sendData($firebaseData,$GCMID,"passenger");
 	
 	
 	return returnSuccessResponse($this);
@@ -818,7 +818,7 @@ $app->post('/driver_api/location/', function($request, $response, $args){
 		$firebaseData = array ("status" => "2",
 		"location" => $LocationString ,
 		"request_id" => $requestID);
-		 Firebase::sendData($firebaseData,$GCMID);
+		 Firebase::sendData($firebaseData,$GCMID,"passenger");
 		
 	}
 	return returnSuccessResponse($this);
@@ -844,7 +844,7 @@ $app->post('/driver_api/status/', function($request, $response, $args){
 	$GCMID= User::getRegistrationTokenUsingID($passengerID,"passengers",$this);
 	
 	$firebaseData = array("status" => "3", "message" => $status);
-	Firebase::sendData($firebaseData,$GCMID);
+	Firebase::sendData($firebaseData,$GCMID,"passenger");
 	
 	$data = array("status" => "0");
 	return $response->withJson($data, 200);

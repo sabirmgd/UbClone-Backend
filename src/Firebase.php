@@ -25,6 +25,7 @@ class Firebase{
 
     $fields = array(
         'registration_ids' => $registrationIDs,
+		'priority' => 'high',
         'data' => $data,
     );
     $headers = array(

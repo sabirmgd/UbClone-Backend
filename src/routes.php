@@ -906,7 +906,7 @@ $app->post('/driver_api/testpsh/', function($request, $response, $args){
 $app->get('/driver_api/testpush/', function($request, $response, $args){
   $registrationID = "eRurufTwDO8:APA91bHVAVK-iVO9IRLoDYnb-nEoKheSJRISmg56-Vbrk_vmkMe1-CTJOxwDxEoTwMi42j4G86VJXzRxEDONJ8F43XGWnFzg9J-i5Xa6qfaI2Fo2zTjEN9z0k3Nf0PZQCHjfm7JOT88L";
   $data= array ('message' => ' you made it');
-  Firebase::sendData($data,$registrationID);
+  Firebase::sendData($data,$registrationID,"driver");
 
 });
 

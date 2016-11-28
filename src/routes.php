@@ -364,7 +364,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			"pickup_text" => $Request['pickup'] ,
 			"dest" => $Request['dest'],
 			"dest_text" => $Request['dest'],
-			 "time " => $Request['time'],
+			 "time" => $Request['time'],
 			 "notes" => $Request['notes'] , 
 			 "passenger_name" => $passengerInfo['fullname'],
 			 "passenger_phone" => $passengerInfo['phone'],

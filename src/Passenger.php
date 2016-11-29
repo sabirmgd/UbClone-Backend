@@ -5,7 +5,7 @@ require_once('Request.php');
 class Passenger extends User {
 	
 		public static function getRides($passengerID,$App){
-		$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `passengerID` FROM `requests` WHERE  `passengerID`= :passengerID';
+		$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `passengerID` ,`pickup_text`,`dest_text` FROM `requests` WHERE  `passengerID`= :passengerID';
 	
 		$getRidesStatement = $App->db->prepare($getRidesSql);
 		$getRidesStatement->bindParam(':passengerID',$passengerID,PDO::PARAM_INT);
@@ -22,6 +22,8 @@ class Passenger extends User {
 			$ride['time'] = $requestRow['requestTime'];
 			$ride['price'] = $requestRow['price'];
 			$ride['status'] = $requestRow['status'];
+			$ride['pickup_text'] = $requestRow['pickup_text'];
+			$ride['dest_text'] = $requestRow['dest_text'];
 			array_push($rides,$ride);
 		}
 		return $rides;

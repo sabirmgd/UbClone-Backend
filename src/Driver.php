@@ -97,7 +97,7 @@ class Driver {
 	public static function activateDriverAfterComletingTheTrip ($ID,$App){
 
 		$activateDriverSql = "UPDATE `drivers` SET 
-							 `active`= 1 ";
+							 `active`= 1  ,`lastUpdated`= CURRENT_TIMESTAMP";
 
 		$IDSql = " WHERE `ID` = :ID " ;
 		$activateDriverSql = $activateDriverSql . $IDSql ;

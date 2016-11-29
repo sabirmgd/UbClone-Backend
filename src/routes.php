@@ -108,7 +108,7 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 $app->post('/passenger_api/register/', function($request, $response, $args){
 
 	$data = $request->getParsedBody();
-	$ExpectedParametersArray = array ('email','password','gender','fullname','phone');
+	$ExpectedParametersArray = array ('email','password','gender','fullname','phone','registration_token');
 	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
 	
 	if (!$areSet){return returnMissingParameterDataResponse($this);}
@@ -140,16 +140,18 @@ $app->post('/passenger_api/register/', function($request, $response, $args){
 	$randomCode = User::generateRandomCode (6);
 	
 	// send the user an email 
-	send_mail($passenger['email'],$randomCode,'welcome to Uber');
+	User::send_mail($passenger['email'],$randomCode,'welcome to Uber');
 	//mail($passenger['email'], 'welcome to Uber', $randomCode);
 	// Insert new user:
 	$hash = password_hash($passenger['password'], PASSWORD_DEFAULT);
-	$insertStatement = $this->db->prepare('INSERT INTO `passengers`(`email`, `gender`, `fullname`, `password`,`phone`,`verificationCode`)  VALUES(?,?,?,?,?,?)');
+	$insertStatement = $this->db->prepare('INSERT INTO `passengers`(`email`, `gender`, `fullname`, `password`,`phone`,`verificationCode`,`GCMID`)  VALUES(?,?,?,?,?,?,?)');
 	
 	try {
-		$insertStatement->execute(array( $passenger['email'],$passenger['gender'] , $passenger['fullname'],$hash,$passenger['phone'] , $randomCode));
+		$insertStatement->execute(array( $passenger['email'],$passenger['gender'] , $passenger['fullname'],$hash,$passenger['phone'] , $randomCode,$passenger['registration_token'] ));
 	} catch(PDOException $ex) {return returnDatabaseErrorResponse ($this,$ex);}
-
+	
+	User::Null_allGCMID_exceptLoggedInUser ($passenger['email'],$passenger['registration_token'],"passengers",$this);
+	
 	$data = array('status' => '0');
 	$newResponse = $response->withJson($data, 201);
 
@@ -299,7 +301,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	 
 	 $data=$request->getQueryParams();
 	
-	 $ExpectedParametersArray = array ('pickup','dest','female_driver','notes','price','request_id','time');
+	 $ExpectedParametersArray = array ('pickup','dest','female_driver','notes','price','request_id','time','pickup_text','dest_text');
 	 
 	 $areSet =  areAllParametersSet($data,$ExpectedParametersArray);
 	 
@@ -331,7 +333,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	if ( Request::isAnewRequest($requestID))
 	{ // does driver have a pending or accepted request
 		
-		$requestID= Request::insert_aRequestInRequestsTable($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$Request['female_driver'],$Request['notes'],$Request['price'],$passengerID,$this);
+		$requestID= Request::insert_aRequestInRequestsTable($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$Request['female_driver'],$Request['notes'],$Request['price'],$passengerID,$Request['pickup_text'],$Request['dest_text'],$this);
 	}	
 		$requestStatus = Request::getRequestStatusInRequestsTable($requestID,$this);
 		
@@ -437,7 +439,7 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
 	$firebaseData = array ("status" => "1","request_id" => $requestID);
 	Firebase::sendData($firebaseData,$GCMID,"driver");
-	
+	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
 	$data = array ('status' => '0');
 	return $response->withJson($data,200);
 	}
@@ -640,8 +642,26 @@ $app->post('/driver_api/requests/', function($request, $response, $args){
 	$driverID=User::getUserID($email,$tableName,$this);
 	
 	$rides=[];
-	$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `driverID` FROM `requests` WHERE  `driverID`= :driverID';
-	
+	$getRidesSql='SELECT 
+  rd.driverID,
+  r.ID AS request_id,
+  r.pickupLongitude,
+  r.pickupLatitude,
+  r.destinationLongitude,
+  r.destinationLatitude,
+  UNIX_TIMESTAMP(r.requestTime) AS requestTime,
+  r.price,
+  r.pickup_text,
+  r.dest_text,
+  r.notes,
+  rd.status,
+  p.fullname AS passenger_name,
+  p.phone AS passenger_phone
+  
+FROM request_driver AS rd
+INNER JOIN requests AS r ON r.ID  = rd.requestID
+INNER JOIN passengers    AS p ON p.ID = r.passengerID
+WHERE rd.driverID = :driverID ';
 	$getRidesStatement = $this->db->prepare($getRidesSql);
 	$getRidesStatement->bindParam(':driverID',$driverID,PDO::PARAM_INT);
 	try{
@@ -660,14 +680,17 @@ $app->post('/driver_api/requests/', function($request, $response, $args){
 	$rides = [];
 	while ($requestRow =  $getRidesStatement->fetch())
 	{   
-		$ride['request_id']= $requestRow ['ID'];
+		$ride['request_id']= $requestRow ['request_id'];
 		$ride['pickup'] = $requestRow['pickupLongitude'] . ',' . $requestRow['pickupLatitude'];
 		$ride['dest'] = $requestRow['destinationLongitude'] . ',' . $requestRow['destinationLatitude'];
 		$ride['time'] = $requestRow['requestTime'];
 		$ride['price'] = $requestRow['price'];
 		$ride['status'] = $requestRow['status'];
-		$ride['passenger_name'] =  "name" ;
-		$ride['passenger_phone'] = "0912300000" ;
+		$ride['notes'] = $requestRow['notes'];
+		$ride['pickup_text'] = $requestRow['pickup_text'];
+		$ride['dest_text'] = $requestRow['dest_text'];
+		$ride['passenger_name'] = $requestRow['passenger_name']; 
+		$ride['passenger_phone'] = $requestRow['passenger_phone']; 
 		array_push($rides,$ride);
 	}
 	$data = array('status' => '0', 'rides' => $rides);
@@ -798,7 +821,7 @@ $app->get('/driver_api/cancel/', function($request, $response, $args){
 	
 	Driver::cancelRequestInRequestsTable ($requestID,$this);
 	Driver::cancelRequestInRequests_DriverTable ($requestID,$driverID,$this);
-	
+	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
 	$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
 	$GCMID = User::getRegistrationTokenUsingID ($PassengerId,"passengers",$this);
 		

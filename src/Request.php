@@ -165,14 +165,14 @@ class Request{
 			}
 	}
 	
-	public static function insert_aRequestInRequestsTable($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$femaleDriver,$notes,$price,$passengerID,$App){
+	public static function insert_aRequestInRequestsTable($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$femaleDriver,$notes,$price,$passengerID,$pickup_text,$dest_text,$App){
 	
-		$createRequestSql= "INSERT INTO `requests`(`pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, `requestTime`, `femaleDriver`, `notes`, `price`, `passengerID`) VALUES (?,?,?,?,?,?,?,?,?)";
+		$createRequestSql= "INSERT INTO `requests`(`pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, `requestTime`, `femaleDriver`, `notes`, `price`, `passengerID` , `pickup_text` ,`dest_text`) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
 		$createRequestStatement = $App->db->prepare($createRequestSql);
 		
 		try // insert into the requests table 
 		{	
-			$createRequestStatement->execute(array ($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$femaleDriver,$notes,$price,$passengerID));
+			$createRequestStatement->execute(array ($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$femaleDriver,$notes,$price,$passengerID,$pickup_text,$dest_text));
 			$requestID = $App->db->lastInsertId();
 			return $requestID ;
 			

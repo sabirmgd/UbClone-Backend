@@ -381,13 +381,13 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 		}
 		else if ($requestStatus == 'accepted' )
 		{
-			$data = array ('status' => '6', 'request_id' => $requestID );
+			$data = array ('status' => '6', 'error_msg' => $requestID );
 			return $response->withJson($data,200);
 			
 		}
 		else if ($requestStatus == 'completed' || $requestStatus == 'canceled')// if request is not pending, return its status 
 			{
-				$data = array ('status' => '5', 'request_status' => $requestStatus );
+				$data = array ('status' => '5', 'error_msg' => $requestStatus );
 				return $response->withJson($data,200);
 			}
 			

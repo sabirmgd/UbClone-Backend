@@ -91,7 +91,7 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 	
 	$data['user'] = $passenger;
 	$data["on_going_request"]="";
-	
+	$data["request_id"]="";
 	$passengerID= $userRow['ID'];
 	$doesPassengerHaveOldRequest = Passenger::doesPassengerHavePendingOrAcceptedRequest ($passengerID,$this) ;
     // status 1 means yes he has 
@@ -99,6 +99,8 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 		//$requestID =  $doesPassengerHaveOldRequest['ID'];
 		$status = $doesPassengerHaveOldRequest['rideStatus'];
 		$data["on_going_request"]=$status;		
+		$requestID = $doesPassengerHaveOldRequest['ID'];
+		$data["request_id"] = $requestID;
 	}
 	$newResponse = $response->withJson($data, 200);
 
@@ -300,7 +302,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	 $tableName='passengers';
 	 
 	 $data=$request->getQueryParams();
-	
+	 
 	 $ExpectedParametersArray = array ('pickup','dest','female_driver','notes','price','request_id','time','pickup_text','dest_text');
 	 
 	 $areSet =  areAllParametersSet($data,$ExpectedParametersArray);
@@ -363,17 +365,17 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			$firebaseData = array("status" => "0",
 			"request_id" => $requestID,
 			"pickup" => $Request['pickup'] ,
-			"pickup_text" => $Request['pickup'] ,
+			"pickup_text" => $data['pickup_text'] ,
 			"dest" => $Request['dest'],
-			"dest_text" => $Request['dest'],
+			"dest_text" => $data['dest_text'],
 			 "time" => $Request['time'],
-			 "notes" => $Request['notes'] , 
+			 "notes" => $data['notes'] , 
 			 "passenger_name" => $passengerInfo['fullname'],
 			 "passenger_phone" => $passengerInfo['phone'],
 			 "price" =>  $price
 			
 			);
-			//var_dump($firebaseData);
+			var_dump($firebaseData);
 			
 			Firebase::sendData($firebaseData,$GCMID,"driver");
 			$data = array ('status' => '0', 'request_id' => $requestID );
@@ -716,7 +718,16 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 	global $userInfo;
 	$email= $userInfo['email'];
 	$tableName='drivers';
-
+	
+	$requestStatus = Request::getRequestStatusInRequestsTable($requestID,$this);
+	echo $requestStatus;
+	if ($requestStatus ==  'canceled' || $requestStatus =='noDriver')
+	{
+		
+			$data=array('status' => '3', 'error_msg' => 'seems as request has been accepted by another driver or canceled');
+			return $response->withJson($data,400);
+		
+	}
 	$driverID = User::getUserID($email,$tableName,$this);
 	$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
 	//var_dump($PassengerId);
@@ -759,7 +770,7 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 		}	
 		else if ($driverAcceptedRequestID != $driverID)
 		{
-			$data=array('status' => '3', 'error_msg' => 'Request has been accepted by another driver');
+			$data=array('status' => '3', 'error_msg' => 'seems as request has been accepted by another driver or canceled');
 			return $response->withJson($data,400);
 		}	
 	}

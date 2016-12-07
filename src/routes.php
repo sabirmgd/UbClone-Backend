@@ -462,13 +462,13 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	}
 	
 	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
-	 $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
-	var_dump( $driverID);
+	$driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+	//var_dump( $driverID);
 	Passenger::arrivedRequestInRequests($requestID,$this);
 	Passenger::arrivedRequestInRequests_driver($requestID,$this);
 	
 	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
-	var_dump($GCMID);
+	//var_dump($GCMID);
 	$firebaseData = array ("status" => "2","request_id" => $requestID);
 	Firebase::sendData($firebaseData,$GCMID,"driver");
 	
@@ -481,7 +481,8 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 });
 
 
-
+	
+	
 $app->post('/passenger_api/token/', function($request, $response, $args){
 
 	global $userInfo;
@@ -877,6 +878,7 @@ $app->post('/driver_api/location/', function($request, $response, $args){
 		 Firebase::sendData($firebaseData,$GCMID,"passenger");
 		
 	}
+	
 	return returnSuccessResponse($this);
 	
 });
@@ -899,6 +901,18 @@ $app->post('/driver_api/status/', function($request, $response, $args){
 	$passengerID = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
 	$GCMID= User::getRegistrationTokenUsingID($passengerID,"passengers",$this);
 	
+	if ($status == 'completed')
+	{
+		
+	$driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+	Passenger::arrivedRequestInRequests($requestID,$this);
+	Passenger::arrivedRequestInRequests_driver($requestID,$this);
+
+	$activeBool = '1';
+	$locationString = '-1';
+	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
+		
+	}
 	$firebaseData = array("status" => "3", "message" => $status);
 	Firebase::sendData($firebaseData,$GCMID,"passenger");
 	

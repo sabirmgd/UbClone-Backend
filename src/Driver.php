@@ -131,7 +131,7 @@ class Driver {
 								 WHERE `email` = :email " ;
 								 
 		$updateDriverLocationStatement = $App->db->prepare($updateDriverLocationSql);
-	    $updateDriverLocationStatement->bindParam(':email',$driverEmail,PDO::PARAM_STR);
+	    $updateDriverLocationStatement->bindParam(':email',$email,PDO::PARAM_STR);
 		$updateDriverLocationStatement->bindParam(':longitude',$longitude,PDO::PARAM_STR);
 		$updateDriverLocationStatement->bindParam(':latitude',$latitude,PDO::PARAM_STR);
 		$updateDriverLocationStatement->execute();

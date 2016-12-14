@@ -113,6 +113,7 @@ class Request{
                   WHERE status IN ("missed") AND
                   requestID = :requestID)
 			AND active= 1
+			AND adminActive = 1
 			AND TIMESTAMPDIFF(MINUTE,lastUpdated, UTC_TIMESTAMP()) < :lastActiveMinutes
 			AND ID NOT IN (SELECT driverID FROM requests WHERE ABS (TIMESTAMPDIFF(MINUTE,:timeo,requestTime) ) < 60
 						  AND status="accepted")';

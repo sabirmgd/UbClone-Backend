@@ -241,20 +241,24 @@ $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 	$locationString=  filter_var($data['location'], FILTER_SANITIZE_STRING);
 	$count = filter_var($data['count'], FILTER_SANITIZE_STRING);
 	$count=intval ($count);
-	list($longitude,$latitude) = explode(',',$locationString);
+	list($latitude ,$longitude) = explode(',',$locationString);
 	
 	
 	
 	// get the n closest drivers 
 	
-	$getCloseDriversSQL = 'SELECT longitude,latitude,111.045 * DEGREES(ACOS(COS(RADIANS(?)) * COS(RADIANS(latitude))
+	$getCloseDriversSQL = 'SELECT longitude,latitude,
+	111045 * DEGREES(ACOS(COS(RADIANS(?)) * COS(RADIANS(latitude))
 	* COS(RADIANS(longitude) - RADIANS(?))
 	+ SIN(RADIANS(?))
 	* SIN(RADIANS(latitude))))
-	AS distance_in_km
+	AS distance_in_m
 	FROM drivers
-	WHERE active=1
-	ORDER BY distance_in_km ASC
+	WHERE 
+	active= 1
+	AND adminActive = 1
+	AND TIMESTAMPDIFF(MINUTE,lastUpdated, UTC_TIMESTAMP()) < 5
+	ORDER BY distance_in_m ASC
 	LIMIT 0,?';
 	
 	$getCloseDriversStatement = $this->db->prepare($getCloseDriversSQL);
@@ -316,7 +320,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	// get request parameters
 	$requestID =$Request['request_id'];
 	$passengerID= User::getUserID($email,$tableName,$this); //($email,$this,'passengers');	
-	list($pickupLongitude,$pickupLatitude) = explode(',',$Request['pickup']);
+	list($pickupLatitude ,$pickupLongitude) = explode(',',$Request['pickup']);
 	list($destinationLatitude,$destinationLongitude) = explode(',',$Request['dest']);
 	$time=Request::getTime ($Request['time']);
 	$lastUpdatedMinute = 5;
@@ -328,7 +332,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	 $doesPassengerHaveOldRequest = Passenger::doesPassengerHavePendingOrAcceptedRequest ($passengerID,$this) ;
 
 	 if ($doesPassengerHaveOldRequest ['status'] == '1'  ){
-		$requestID =  $doesPassengerHaveOldRequest['ID'];
+		//$requestID =  $doesPassengerHaveOldRequest['ID'];
 			//$status = $doesPassengerHaveOldRequest['rideStatus'];
 					//echo $statos;
 	}
@@ -375,7 +379,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			 "price" =>  $price
 			
 			);
-			var_dump($firebaseData);
+			//var_dump($firebaseData);
 			
 			Firebase::sendData($firebaseData,$GCMID,"driver");
 			$data = array ('status' => '0', 'request_id' => $requestID );
@@ -410,7 +414,11 @@ $app->get('/passenger_api/requests/', function($request, $response, $args){
 });
 
 $app->get('/passenger_api/cancel/', function($request, $response, $args){
-
+ // user can't cancel a completed request just return 0 
+ // if its accepted by someone, tell him 
+ // if its missed 
+ // if its completed 
+ 
 	$data=$request->getQueryParams();
 	
 	$ExpectedParametersArray = array ('request_id');
@@ -422,18 +430,19 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 	$status='canceled';
 	//Request::setRequestStatusInRequestsTable($requestID,$status,$this);
 	
-	
+	//Request::getRequestStatusInRequest_DriverTable
 	// check if there is a driver that accepted the request 
 	 $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
 	if ($driverID == null)
-	{
+	{	
+		//$driverID = Driver::getIdOfDriverWhoCompletedTheRequest($requestID,$this);
 		Passenger::cancelRequestInRequests($requestID,$this);
-		Passenger::cancelRequestInRequest_Driver($requestID,$this);
+		//Passenger::cancelRequestInRequest_Driver($requestID,$this);
 		//echo "no driver accepted";
 		$data = array ('status' => '0');
 	return $response->withJson($data,200);
 	}
-	else { 
+	else { // some one only accepted  nigga
 	Passenger::cancelRequestInRequests($requestID,$this);
 	Passenger::cancelRequestInRequest_Driver($requestID,$this);
 	//echo ' some nigga accepted ' ;// if there is a driver accepted the request
@@ -452,6 +461,11 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 
 $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	//authentication header
+	
+	// user can send this when there is a trip accepted 
+	// the Firebase should only be sent when the status is only accepted but of its completed, then no need 
+	// what if the trip got canceled by driver, and this user pressed arrived 
+	// 
 	$data=$request->getParsedBody();
 	
 	
@@ -684,8 +698,8 @@ WHERE rd.driverID = :driverID ';
 	while ($requestRow =  $getRidesStatement->fetch())
 	{   
 		$ride['request_id']= $requestRow ['request_id'];
-		$ride['pickup'] = $requestRow['pickupLongitude'] . ',' . $requestRow['pickupLatitude'];
-		$ride['dest'] = $requestRow['destinationLongitude'] . ',' . $requestRow['destinationLatitude'];
+		$ride['pickup'] = $requestRow['pickupLatitude'] . ',' . $requestRow['pickupLongitude'];
+		$ride['dest'] = $requestRow['destinationLatitude'] . ',' . $requestRow['destinationLongitude'];
 		$ride['time'] = $requestRow['requestTime'];
 		$ride['price'] = $requestRow['price'];
 		$ride['status'] = $requestRow['status'];

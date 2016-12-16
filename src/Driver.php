@@ -51,7 +51,20 @@ class Driver {
 	 $getDriverIdSql=	"SELECT `driverID` FROM `request_driver` 
 						 WHERE 
 						 requestID = :requestID
-						 AND status IN ('accepted' , 'completed') ";
+						 AND status = 'accepted' ";
+	 $getDriverIdStatement = $App->db->prepare($getDriverIdSql);
+	 $getDriverIdStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
+	 $getDriverIdStatement->execute();
+	 $row=$getDriverIdStatement->fetch();
+	 $driverID = $row['driverID'];
+	 return $driverID;
+	}
+	
+	public static function getIdOfDriverWhoCompletedTheRequest($requestID,$App){
+	 $getDriverIdSql=	"SELECT `driverID` FROM `request_driver` 
+						 WHERE 
+						 requestID = :requestID
+						 AND status = 'completed' ";
 	 $getDriverIdStatement = $App->db->prepare($getDriverIdSql);
 	 $getDriverIdStatement->bindParam(':requestID',$requestID,PDO::PARAM_INT);
 	 $getDriverIdStatement->execute();
@@ -72,7 +85,7 @@ class Driver {
 		
 		
 		if ($activeBool == '1'){
-			list($longitude,$latitude) = explode(',',$locationString);
+			list($latitude ,$longitude) = explode(',',$locationString);
 			$lonitudeLatidudeSql = " ,`longitude`= :longitude ,
 									`latitude`= :latitude " ;		
 			$activateDriverSql = $activateDriverSql . $lonitudeLatidudeSql;
@@ -124,7 +137,7 @@ class Driver {
 	public static function updateDriverLocationInDriversTable ($email,$LocationString,$App)
 	{
 		
-	list($longitude,$latitude) = explode(',',$LocationString);
+	list($latitude ,$longitude) = explode(',',$LocationString);
 	$updateDriverLocationSql = " UPDATE `drivers` SET 
 								`longitude`= :longitude ,
 								`latitude`= :latitude

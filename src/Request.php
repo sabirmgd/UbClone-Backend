@@ -173,7 +173,7 @@ class Request{
 		
 		try // insert into the requests table 
 		{	
-			$createRequestStatement->execute(array ($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$femaleDriver,$notes,$price,$passengerID,$pickup_text,$dest_text));
+			$createRequestStatement->execute(array ($pickupLongitude,$pickupLatitude,$destinationLongitude ,$destinationLatitude,$time,$femaleDriver,$notes,$price,$passengerID,$pickup_text,$dest_text));
 			$requestID = $App->db->lastInsertId();
 			return $requestID ;
 			

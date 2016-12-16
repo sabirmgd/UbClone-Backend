@@ -5,7 +5,24 @@ require_once('Request.php');
 class Passenger extends User {
 	
 		public static function getRides($passengerID,$App){
-		$getRidesSql='SELECT `ID`, `pickupLongitude`, `pickupLatitude`, `destinationLongitude`, `destinationLatitude`, UNIX_TIMESTAMP(`requestTime`) AS requestTime,  `price`, `status` , `passengerID` ,`pickup_text`,`dest_text` FROM `requests` WHERE  `passengerID`= :passengerID';
+		$getRidesSql='SELECT 
+					r.ID,
+					r.pickupLongitude,
+					r.pickupLatitude,
+					r.destinationLongitude, 
+					r.destinationLatitude,
+					UNIX_TIMESTAMP(r.requestTime) AS requestTime,
+					r.price,
+					r.status ,
+					r.passengerID ,
+					r.pickup_text,
+					r.dest_text, 
+					c.plateNumber,
+					d.fullname
+					FROM requests AS r 
+					LEFT JOIN drivers AS d ON r.driverID = d.ID
+					LEFT JOIN cars AS c on c.driverID = d.ID
+				WHERE r.passengerID = :passengerID';
 	
 		$getRidesStatement = $App->db->prepare($getRidesSql);
 		$getRidesStatement->bindParam(':passengerID',$passengerID,PDO::PARAM_INT);
@@ -17,13 +34,15 @@ class Passenger extends User {
 		while ($requestRow =  $getRidesStatement->fetch())
 		{   
 			$ride['request_id']= $requestRow ['ID'];
-			$ride['pickup'] = $requestRow['pickupLongitude'] . ',' . $requestRow['pickupLatitude'];
-			$ride['dest'] = $requestRow['destinationLongitude'] . ',' . $requestRow['destinationLatitude'];
+			$ride['pickup'] = $requestRow['pickupLatitude'] . ',' . $requestRow['pickupLongitude'];
+			$ride['dest'] = $requestRow['destinationLatitude'] . ',' . $requestRow['destinationLongitude'];
 			$ride['time'] = $requestRow['requestTime'];
 			$ride['price'] = $requestRow['price'];
 			$ride['status'] = $requestRow['status'];
 			$ride['pickup_text'] = $requestRow['pickup_text'];
 			$ride['dest_text'] = $requestRow['dest_text'];
+			$ride['driver_name'] = ($requestRow['fullname'] == null ) ? "" :  $requestRow['fullname'];
+			$ride['driver_plate'] = ($requestRow['plateNumber'] == null ) ? "" : $requestRow['plateNumber'] ;
 			array_push($rides,$ride);
 		}
 		return $rides;

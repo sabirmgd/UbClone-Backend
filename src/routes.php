@@ -1,5 +1,6 @@
 <?php
 // Routes
+date_default_timezone_set("Africa/Khartoum");
 require_once('User.php');
 require_once('Request.php');
 require_once('Passenger.php');
@@ -55,21 +56,30 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 	global $userInfo;
     $email = $userInfo['email'];
 	$data = $request->getParsedBody();
-	$ExpectedParametersArray = array ('registration_token');
+	$ExpectedParametersArray = array ('registration_token','version_code');
 	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
 	
 	if (!$areSet){return returnMissingParameterDataResponse($this);}
-	
+	  
 	$data = filterRequestParameters ($data,$ExpectedParametersArray);
 	
 	$tableName = 'passengers';
+	$version = User::getValueOftheKey ("passenger_version",$this);
+	
+	if ($version > $data['version_code'] )
+	{
+		$data = array('status' => '3', 'error_msg' => "Outdated version" );
+	    return $this->response->withJson($data, 200);
+		
+		
+	}
 	$GCMID = $data['registration_token'];
 	
 	$oldGCMID = User::getRegistrationTokenUsingEmail ($email,$tableName,$this);
 	
 	if ($GCMID != $oldGCMID)// means user logged in from another phone 
 	{	$firebaseData = array("status" => "5");
-		Firebase::sendData($firebaseData,$oldGCMID,"passenger");
+		Firebase::sendData($firebaseData,$oldGCMID,"passenger", 2419200);
 	}
 	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
 	User::Null_allGCMID_exceptLoggedInUser ($email,$GCMID,$tableName,$this);
@@ -78,7 +88,10 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 	//echo $token;
 	$userStatement = $this->db->prepare("SELECT * FROM passengers WHERE email = ?");
 	$userStatement->execute(array($userInfo['email']));
-
+	
+	
+	
+	
 	$data = ['status' => '0' ];
 
 	$userRow = $userStatement->fetch();
@@ -106,6 +119,43 @@ $app->post('/passenger_api/login/', function($request, $response, $args){
 
 	return $newResponse;
 });
+
+$app->get('/passenger_api/update/', function($request, $response, $args){
+ 
+ 
+    global $userInfo;
+    $email = $userInfo['email'];
+	$data = $request->getQueryParams();
+	$ExpectedParametersArray = array ('fullname','password','phone');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	$passenger=$data;
+	$phoneStatement = $this->db->prepare('SELECT * FROM passengers where phone = ? and NOT (email = ?) ');
+	$phoneStatement->execute(array($passenger['phone'],$email));
+	$numberOfRows = $phoneStatement->fetchColumn(); 
+	if ($numberOfRows != 0) {
+		$data = array('status' => '4', 'error_msg' => 'User already exist with this phone number');
+		return $response->withJson($data, 200);
+	}
+	
+	
+	$hash = password_hash($passenger['password'], PASSWORD_DEFAULT);
+    // Check if user exist by checking the email field:
+	$passengerStatement = $this->db->prepare('UPDATE passengers SET fullname=?, phone=?, password=? where email = ?');
+	$passengerStatement->execute(array($passenger['fullname'],$passenger['phone'],$hash,$email));
+	$count = $passengerStatement->rowCount();
+	if ($count != 0)
+    return returnSuccessResponse($this);
+else {
+	$data = array('status' => '2', 'error_msg' => "Unknown error occurred" );
+	return $App->response->withJson($data, 500);
+}
+
+});
+
 
 $app->post('/passenger_api/register/', function($request, $response, $args){
 
@@ -159,7 +209,6 @@ $app->post('/passenger_api/register/', function($request, $response, $args){
 
 	return $newResponse;
 });
-
 
 
 
@@ -258,6 +307,7 @@ $app->get('/passenger_api/get_drivers/', function($request, $response, $args){
 	active= 1
 	AND adminActive = 1
 	AND TIMESTAMPDIFF(MINUTE,lastUpdated, UTC_TIMESTAMP()) < 5
+	
 	ORDER BY distance_in_m ASC
 	LIMIT 0,?';
 	
@@ -320,6 +370,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	// get request parameters
 	$requestID =$Request['request_id'];
 	$passengerID= User::getUserID($email,$tableName,$this); //($email,$this,'passengers');	
+	$passengerGender =  User::getUserGender($email,$tableName,$this);
 	list($pickupLatitude ,$pickupLongitude) = explode(',',$Request['pickup']);
 	list($destinationLatitude,$destinationLongitude) = explode(',',$Request['dest']);
 	$time=Request::getTime ($Request['time']);
@@ -343,11 +394,11 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 	}	
 		$requestStatus = Request::getRequestStatusInRequestsTable($requestID,$this);
 		
-		if ($requestStatus == 'pending')
+		if ($requestStatus == 'pending' )
 			
 		{	
 		
-		$driverID = Request::getClosestDriver($pickupLatitude,$pickupLongitude,$requestID,$time,$genderBool,$lastUpdatedMinute,$this);
+		$driverID = Request::getClosestDriver($pickupLatitude,$pickupLongitude,$requestID,$time,$genderBool,$lastUpdatedMinute,$passengerGender,$this);
 		
 			// in case no driver 
 			if ($driverID == null)
@@ -381,7 +432,7 @@ $app->get('/passenger_api/driver/', function ($request, $response, $args) {
 			);
 			//var_dump($firebaseData);
 			
-			Firebase::sendData($firebaseData,$GCMID,"driver");
+			Firebase::sendData($firebaseData,$GCMID,"driver",25);
 			$data = array ('status' => '0', 'request_id' => $requestID );
 			return $response->withJson($data,200);
 		}
@@ -414,9 +465,9 @@ $app->get('/passenger_api/requests/', function($request, $response, $args){
 });
 
 $app->get('/passenger_api/cancel/', function($request, $response, $args){
- // user can't cancel a completed request just return 0 
- // if its accepted by someone, tell him 
- // if its missed 
+ // pending -> change db, return success
+ // accepted -> change db, inform driver, return success
+ // completed by driver -> return success
  // if its completed 
  
 	$data=$request->getQueryParams();
@@ -433,7 +484,7 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 	//Request::getRequestStatusInRequest_DriverTable
 	// check if there is a driver that accepted the request 
 	 $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
-	if ($driverID == null)
+	if ($driverID == null) // no driver accepted can be pending(it should be pending, nodriver)
 	{	
 		//$driverID = Driver::getIdOfDriverWhoCompletedTheRequest($requestID,$this);
 		Passenger::cancelRequestInRequests($requestID,$this);
@@ -449,7 +500,7 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 		// get the driver GCM using his ID
 	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
 	$firebaseData = array ("status" => "1","request_id" => $requestID);
-	Firebase::sendData($firebaseData,$GCMID,"driver");
+	Firebase::sendData($firebaseData,$GCMID,"driver",2419200);
 	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
 	$data = array ('status' => '0');
 	return $response->withJson($data,200);
@@ -462,10 +513,12 @@ $app->get('/passenger_api/cancel/', function($request, $response, $args){
 $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	//authentication header
 	
-	// user can send this when there is a trip accepted 
+	// requestStatus = accepted -> change the DB, Firebase to driver, return success
+	// requestStatus = completed -> do nothing to DB, do nothing to driver, return success 
+	
 	// the Firebase should only be sent when the status is only accepted but of its completed, then no need 
 	// what if the trip got canceled by driver, and this user pressed arrived 
-	// 
+	
 	$data=$request->getParsedBody();
 	
 	
@@ -476,20 +529,44 @@ $app->post('/passenger_api/arrived/', function($request, $response, $args){
 	}
 	
 	$requestID = filter_var($data['request_id'], FILTER_SANITIZE_STRING);
+	$status = Request::getRequestStatusInRequestsTable($requestID,$this);
+	
+	if ($status == 'completed') // by driver
+	{
+		return returnSuccessResponse($this);
+		
+	}
+	else if ($status == 'canceled' || $status == 'noDriver' )
+	{
+		return returnSuccessResponse($this);
+	}
+	
+	else 
+	{ // accepted, canceled , noDriver, pending 
+	// if its pending, he cant get to this arrived request
+	// if its canceled or noDriver(can he ? do nothing as arrived: do nothing as arrived )
+	// if its accepted, inform the driver, change db
+    	
 	$driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
 	//var_dump( $driverID);
+	
+	
 	Passenger::arrivedRequestInRequests($requestID,$this);
 	Passenger::arrivedRequestInRequests_driver($requestID,$this);
 	
 	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
 	//var_dump($GCMID);
 	$firebaseData = array ("status" => "2","request_id" => $requestID);
-	Firebase::sendData($firebaseData,$GCMID,"driver");
+	Firebase::sendData($firebaseData,$GCMID,"driver",2419200);
 	
 	$activeBool = '1';
 	$locationString = '-1';
 	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
-	return returnSuccessResponse($this);
+		return returnSuccessResponse($this);
+	}
+	
+	
+		
 	
 	
 });
@@ -520,20 +597,39 @@ $app->get('/time/', function($request, $response, $args){
 
 	$gtm = (gmdate("Y-m-d H:i:s", time())); 
 	$unix = strtotime ($gtm);
+$unix= (int) time() ;
 	$data = array("time" => $unix);
 	return $response->withJson($data, 200);
 	
 });
 
 $app->get('/price/', function($request, $response, $args){
-	$perkmKey = "perkm";
-	$perkm = User::getValueOftheKey ($perkmKey ,$this) ;
-	$perminKey = "permin";
-	$permin = User::getValueOftheKey ($perminKey  ,$this) ;
+	/*
+	SELECT *
+	FROM `prices`
+	WHERE ('00:30:00' BETWEEN startTime AND endTime)
+ */
+ 
+ $data=$request->getQueryParams();
+
+	$ExpectedParametersArray = array ('time');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	
-	$minKey = "min";
-	$min = User::getValueOftheKey ($minKey  ,$this) ;
+	$time = ($data['time'] == "now") ?  date("H:i:s") : $data['time'];
+	//var_dump(date("H:i:s") );
+    //$time = '00:00:00';
+	$priceRow = User::getPrice($time,$this);
+	//$perkmKey = "perkm";
+	//$perkm = User::getValueOftheKey ($perkmKey ,$this) ;
+	//$perminKey = "permin";
+	//$permin = User::getValueOftheKey ($perminKey  ,$this) ;
 	
+	//$minKey = "min";
+	//$min = User::getValueOftheKey ($minKey  ,$this) ;
+	$perkm = $priceRow['perkm'];
+	$permin = $priceRow['permin'];
+	$min = $priceRow['min'];
 	$data = array("perkm" => $perkm , "permin" => $permin , "min" => $min );
 	return $response->withJson($data, 200);
 	
@@ -605,12 +701,23 @@ $app->post('/driver_api/login/', function($request, $response, $args){
 	global $userInfo;
     $email = $userInfo['email'];
 	$data = $request->getParsedBody();
-	$ExpectedParametersArray = array ('registration_token');
+	$ExpectedParametersArray = array ('registration_token','version_code');
 	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
 	
 	if (!$areSet){return returnMissingParameterDataResponse($this);}
 	
 	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	
+	$version = User::getValueOftheKey ("driver_version",$this);
+	
+	if ($version > $data['version_code'] )
+	{
+		$data = array('status' => '3', 'error_msg' => "Outdated version" );
+	    return $this->response->withJson($data, 200);
+		
+		
+	}
+	
 	
 	$tableName = 'drivers';
 	$GCMID = $data['registration_token'];
@@ -621,7 +728,7 @@ $app->post('/driver_api/login/', function($request, $response, $args){
 	
 	if ($GCMID != $oldGCMID)// means user logged in from another phone 
 	{	$firebaseData = array("status" => "3");
-		Firebase::sendData($firebaseData,$oldGCMID,"driver");
+		Firebase::sendData($firebaseData,$oldGCMID,"driver",2419200);
 	}
 	User::updateRegistrationToken ($email,$tableName,$GCMID,$this);
 	User::Null_allGCMID_exceptLoggedInUser ($email,$GCMID,$tableName,$this);
@@ -735,32 +842,35 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 	$tableName='drivers';
 	
 	$requestStatus = Request::getRequestStatusInRequestsTable($requestID,$this);
-	echo $requestStatus;
-	if ($requestStatus ==  'canceled' || $requestStatus =='noDriver')
+	//echo $requestStatus;
+	if ($requestStatus ==  'canceled' )
 	{
 		
 			$data=array('status' => '3', 'error_msg' => 'seems as request has been accepted by another driver or canceled');
 			return $response->withJson($data,400);
 		
 	}
+	
 	$driverID = User::getUserID($email,$tableName,$this);
 	$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
 	//var_dump($PassengerId);
 	$GCMID = User::getRegistrationTokenUsingID ($PassengerId,"passengers",$this);
 	//var_dump($GCMID);
 	// check if there is another driver accepted this request
-	if ($acceptOrReject == "1"	)
-	{	
+	
+		//$here = " am here ";
 		$driverAcceptedRequestID=Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+		
 		// if there is no driver accepted, insert into the database and inform the passenger
-		if ($driverAcceptedRequestID == null ) // if 
+		if ($driverAcceptedRequestID == null ) // if no one accepted the request before
 		{
-			
+			//var_dump($here);
 			// inform the passenger, firebase code 
 			
 			//echo $PassengerId;
-			
-			$carInfo= Driver::getDriverVehicle_Plate($driverID,$this);
+			if ($acceptOrReject == "1"	){
+				//var_dump($here);
+				$carInfo= Driver::getDriverVehicle_Plate($driverID,$this);
 	
 			$driverRow = User::getNamePhoneUsingEmail ($email,"drivers",$this);
 			$firebaseData = array(
@@ -770,33 +880,50 @@ $app->post('/driver_api/accept/', function($request, $response, $args){
 			"vehicle" => $carInfo['model'],  
 			"plate" => $carInfo['plateNumber']  , 
 			"request_id" => $requestID );
-			Firebase::sendData($firebaseData,$GCMID,"passenger");
+			
+			Firebase::sendData($firebaseData,$GCMID,"passenger",300);
 			Driver::acceptRequestInRequests($requestID,$driverID,$this);
+			
+			Request::setTime('driverAcceptedTime',$requestID,$this);
 			Driver::acceptRequestInRequests_driver($driverID,$requestID,$this);
 			$activeBool = '0';
 			$locationString = '-1';
-			Driver::activateDriver($email,$activeBool,$locationString,$this);
+			//Driver::activateDriver($email,$activeBool,$locationString,$this);
 			return returnSuccessResponse($this);
-		}
-		else if ($driverAcceptedRequestID == $driverID)
-		{
-			$data=array('status' => '0', 'message' => 'you have already accepted this request');
-			return $response->withJson($data,400);
-		}	
-		else if ($driverAcceptedRequestID != $driverID)
-		{
-			$data=array('status' => '3', 'error_msg' => 'seems as request has been accepted by another driver or canceled');
-			return $response->withJson($data,400);
-		}	
-	}
-	else if ($acceptOrReject == "0")
-	{
-		$firebaseData = array(
+			}
+			else if ($acceptOrReject == "0")
+			{//var_dump($here);
+			// if the driver rejected the request
+		    $firebaseData = array(
 			"status" => "0",
 			"request_id" => $requestID );
-			Firebase::sendData($firebaseData,$GCMID,"passenger");
-
-	}
+			Firebase::sendData($firebaseData,$GCMID,"passenger",30);
+			return returnSuccessResponse($this);
+			} 
+				
+			
+		}
+		else if ($driverAcceptedRequestID == $driverID) //if the same person accepted the request
+		{
+			
+			
+			$data=array('status' => '0', 'message' => 'you have already accepted this request');
+			return $response->withJson($data,400);
+			
+				
+		}	
+		else if ($driverAcceptedRequestID != $driverID && $driverAcceptedRequestID ) // if a different person accepting the request
+		{
+			if ($acceptOrReject == "1"	){
+			
+			$data=array('status' => '3', 'error_msg' => 'seems as request has been accepted by another driver or canceled');
+			return $response->withJson($data,400);
+			}
+			else 
+			return returnSuccessResponse($this);
+		}	
+	
+	
 	
 
 	
@@ -830,7 +957,7 @@ $app->post('/driver_api/active/', function($request, $response, $args){
 $app->get('/driver_api/cancel/', function($request, $response, $args){
 	$data=$request->getQueryParams();
 	//$data['request_id']
-	
+	// 
 	
 	$ExpectedParametersArray = array ('request_id');
 	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
@@ -853,7 +980,7 @@ $app->get('/driver_api/cancel/', function($request, $response, $args){
 		
 	$firebaseData = array ("status" => "4",
 	"request_id" => $requestID);
-	Firebase::sendData($firebaseData,$GCMID,"passenger");
+	Firebase::sendData($firebaseData,$GCMID,"passenger",2419200);
 	
 	
 	return returnSuccessResponse($this);
@@ -889,7 +1016,7 @@ $app->post('/driver_api/location/', function($request, $response, $args){
 		$firebaseData = array ("status" => "2",
 		"location" => $LocationString ,
 		"request_id" => $requestID);
-		 Firebase::sendData($firebaseData,$GCMID,"passenger");
+		 Firebase::sendData($firebaseData,$GCMID,"passenger",15);
 		
 	}
 	
@@ -917,7 +1044,7 @@ $app->post('/driver_api/status/', function($request, $response, $args){
 	
 	if ($status == 'completed')
 	{
-		
+		// if passenger completed from his phone 
 	$driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
 	Passenger::arrivedRequestInRequests($requestID,$this);
 	Passenger::arrivedRequestInRequests_driver($requestID,$this);
@@ -925,10 +1052,23 @@ $app->post('/driver_api/status/', function($request, $response, $args){
 	$activeBool = '1';
 	$locationString = '-1';
 	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
-		
+	Request::setTime('requestCompletionTime',$requestID,$this);	
 	}
-	$firebaseData = array("status" => "3", "message" => $status);
-	Firebase::sendData($firebaseData,$GCMID,"passenger");
+	
+	else if ($status == 'passenger_onboard')
+	{
+		
+	Request::setTime('passengerOnBoardTime',$requestID,$this);
+	}
+	else if ($status == 'on_the_way')
+	{
+	Request::setTime('driverOnTheWayTime',$requestID,$this);
+	}
+	
+
+	
+	$firebaseData = array("status" => "3", "message" => $status, "request_id" => $requestID);
+	Firebase::sendData($firebaseData,$GCMID,"passenger",300);
 	
 	$data = array("status" => "0");
 	return $response->withJson($data, 200);
@@ -965,12 +1105,6 @@ $app->post('/driver_api/testpsh/', function($request, $response, $args){
 		return $response->withJson($data,200);
 });
 
-$app->get('/driver_api/testpush/', function($request, $response, $args){
-  $registrationID = "eRurufTwDO8:APA91bHVAVK-iVO9IRLoDYnb-nEoKheSJRISmg56-Vbrk_vmkMe1-CTJOxwDxEoTwMi42j4G86VJXzRxEDONJ8F43XGWnFzg9J-i5Xa6qfaI2Fo2zTjEN9z0k3Nf0PZQCHjfm7JOT88L";
-  $data= array ('message' => ' you made it');
-  Firebase::sendData($data,$registrationID,"driver");
-
-});
 
 
 
@@ -983,6 +1117,7 @@ $app->post('/driver_api/sendemail/', function($request, $response, $args){
 	
 	
 });
+
 $app->post('/driver_api/testplate/', function($request, $response, $args){
 	
 	
@@ -999,8 +1134,383 @@ $app->post('/driver_api/testplate/', function($request, $response, $args){
 });
 
 
+$app->post('/admin/update_map/', function($request, $response, $args){
+	
 
+
+
+  $sql = "SELECT 
+  r.ID AS requestID,
+  r.pickupLatitude,
+  r.pickupLongitude,
+  r.destinationLatitude,
+  r.destinationLongitude,
+  UNIX_TIMESTAMP(r.requestTime),
+  r.requestTime,
+  r.notes,
+  r.price,
+  r.status,
+  p.ID AS passengerID,
+  p.fullname AS passengerName,
+  p.phone As passengerPhone,
+  d.ID AS driverID,
+  d.fullname AS driverName,
+  d.phone AS driverPhone,
+  r.driverAcceptedTime,
+  r.driverOnTheWayTime,
+  r.passengerOnBoardTime,
+  r.requestCompletionTime,
+  c.plateNumber,
+  c.model
+FROM requests AS r
+INNER JOIN passengers AS p ON r.passengerID  = p.ID
+LEFT JOIN drivers    AS d ON d.ID = r.driverID
+LEFT JOIN cars As c on c.driverID = d.ID";
+$sth = $this->db->prepare($sql );
+$sth->execute();
+$dataAraay = $sth->fetchAll();
+
+$sql2 = " SELECT
+
+d.ID,
+d.latitude,
+d.longitude,
+d.fullname,
+c.model,
+c.plateNumber,
+d.phone
+
+
+from drivers as d 
+INNER join cars as c where 
+d.ID = c.driverID AND
+	d.active= 1
+	AND d.adminActive = 1
+	AND TIMESTAMPDIFF(MINUTE,d.lastUpdated, UTC_TIMESTAMP()) < 5"; 
+
+$stmt2= $this->db->prepare($sql2);
+$stmt2->execute();
+$drivers = $stmt2->fetchAll();
+
+
+
+	//$tableDatabaseColumns = $tableHeader;
+
+
+	// make the body 
+	foreach ($dataAraay as $row) {
+       
+//echo " i am updated";
+	//var_dump ($row);
+				 $time = strtotime($row['requestTime'].' UTC');
+				 $dateInLocal = date("Y/m/d H:i:s", $time);
+				 list ($day,$time) = explode(" ", $dateInLocal ,2 );
+				 $str_time = $time;
+
+				$str_time = preg_replace("/^([\d]{1,2})\:([\d]{2})$/", "00:$1:$2", $str_time);
+
+				sscanf($str_time, "%d:%d:%d", $hours, $minutes, $seconds);
+
+				$time_seconds = $hours * 3600 + $minutes * 60 + $seconds;
+				$day = date("d/m/Y", strtotime($day))   ;
+				 
+				if ($row['driverOnTheWayTime'] != null && $row['status'] != "canceled" && $row['status'] != "pending" )
+			  
+				{
+					if ($row['passengerOnBoardTime'] != null){
+						$status = "arrived_at_pickup";
+						if ($row['requestCompletionTime'] != null  || $row['status'] == "completed"){
+						$status='completed';
+						}
+					}
+						
+					else 
+						$status = "on_the_way";
+				}
+				else 
+					$status =$row['status'];
+					
+					if ($row['passengerOnBoardTime'] == null )
+					{
+						$passengerOnBoardTime = "";
+					}
+		
+			      else $passengerOnBoardTime = $row['passengerOnBoardTime'];
+				//echo " here";
+				//echo $row['passengerOnBoardTime'];
+				if ($status == "accepted" || $status == "on_the_way" || $status == "arrived_at_pickup" || $status == "noDriver" || $status == "pending")
+				{
+	 $output['requests'][] = array(
+    "request_id" =>   $row['requestID'],
+	"pickup_lat" =>	$row['pickupLatitude'],
+	"pickup_lng" =>	$row['pickupLongitude'],
+	"dest_lat" =>	$row['destinationLatitude'],
+	"dest_long" =>	$row['destinationLongitude'],
+    "time" =>   ($row['UNIX_TIMESTAMP(r.requestTime)']),
+    "notes" =>   $row['notes'],
+	"price" =>	$row['price'],
+	"status" =>	$status,   // $status,
+	"passenger_id" =>	$row['passengerID'],
+	"passenger_name" =>	$row['passengerName'],
+	"passenger_phone"	 => $row['passengerPhone'],
+	"driver_id" =>	$row['driverID'],
+	"driver_name" =>	$row['driverName'],
+	"driver_phone" =>	$row['driverPhone'],
+	"driver_plate" => $row['plateNumber'],
+	"driver_vehicle" => $row['model']
+		//$time_seconds,
+		//$row['notes'],
+		//$status,
+		// ($row['driverAcceptedTime'] == null ) ? "" :  date("Y/m/d H:i:s", strtotime($row['driverAcceptedTime'].' UTC'))    ,
+		//($row['driverOnTheWayTime'] == null) ? "" :   date("Y/m/d H:i:s", strtotime($row['driverOnTheWayTime'].' UTC'))  ,
+		//($row['passengerOnBoardTime'] == null) ? "" :  date("Y/m/d H:i:s", strtotime($row['passengerOnBoardTime'].' UTC'))   ,
+		///($row['requestCompletionTime']== null ) ? "" :  date("Y/m/d H:i:s", strtotime($row['requestCompletionTime'].' UTC'))  
+    );
+	
+				}
+			
+    }
+	
+	
+
+
+
+
+
+
+ 
+ foreach ($drivers as $driver)
+ {
+	 
+	 $output['drivers'][]= array (
+	"id" => $driver['ID'],
+	"lat" => $driver['latitude'],
+	 "lng" =>$driver['longitude'],
+	 "name" => $driver['fullname'],
+	 "vehicle" =>$driver['model'],
+	 "plate" => $driver['plateNumber'],
+     "phone"=> $driver['phone'],
+	 
+	 );
+	 
+	 
+ }
+ 
+ $output['status'] = "0";
+  $output['time'] = "0";
+  
+  $gtm = (gmdate("Y-m-d H:i:s", time())); 
+	$unix = strtotime ($gtm);
+	
+	// $unix = strtotime (gmdate("Y-m-d H:i:s", time()));
+ $output['status'] = "0";
+  $output['time'] = $unix;
+	//$output['time'] = "test";
+	
+ $response->withJson($output,200);;
+
+
+	
+});
+
+
+
+$app->post('/admin/direct/', function($request, $response, $args){
+	
+	$data=$request->getParsedBody();
+
+	$ExpectedParametersArray = array ('request_id','driver_id');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	$requestID = $data['request_id'];
+	
+	
+	if ( Request::isAnewRequest($requestID))
+	{ // does driver have a pending or accepted request
+		
+		$requestID= Request::insert_aRequestInRequestsTable($pickupLongitude,$pickupLatitude,$destinationLatitude,$destinationLongitude,$time,$Request['female_driver'],$Request['notes'],$Request['price'],$passengerID,$Request['pickup_text'],$Request['dest_text'],$this);
+	}	
+	
+		$requestStatus = Request::getRequestStatusInRequestsTable($requestID,$this);
+		
+		//echo "status   " . $requestStatus ;
+		
+		//var_dump($Request);
+		if ($requestStatus == 'accepted' || $requestStatus == 'noDriver' )
+			
+		{	
+		// get the request info 
+		$sqlr = "SELECT *, UNIX_TIMESTAMP(requestTime) FROM requests WHERE ID = ? ";
+		$requestStatement = $this->db->prepare($sqlr);
+		$requestStatement->execute(array($requestID));
+	    $Request = $requestStatement->fetch();
+		
+		
+		$driverIDWhoAccepted = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+		
+		// change the database, to pending and missed
+		Request::setRequestStatusInRequestsTable($requestID,'noDriver',$this);
+		Request::setRequestStatusInRequest_DriverTable($requestID,$driverIDWhoAccepted ,'missed',$this);
+		
+		// send a cancel GCM to the driver who accepted 
+		$DriverGCMID = User::getRegistrationTokenUsingID ($driverIDWhoAccepted,"drivers",$this);
+	    $firebaseData = array ("status" => "1","request_id" => $requestID);
+		Firebase::sendData($firebaseData,$DriverGCMID,"driver",2419200);
+		Driver::activateDriverAfterComletingTheTrip ($driverIDWhoAccepted,$this);
+		
+		// send to the new driver 
+		$driverID = $data['driver_id'];
+		
+			// in case no driver 
+			if ($driverID == null)
+			{
+				$status='noDriver';
+				Request::setRequestStatusInRequestsTable($requestID,$status,$this);
+				$data = array ('status' => '3', 'error_msg' => 'No driver found' );
+				return $response->withJson($data,200);
+			}
+			
+			
+			// then add it to request_driver table with missed status 
+			// check if this guy already got this request before 
+			
+			if (Request::getRequestStatusInRequest_DriverTable($requestID,$driverID,$this) == null)
+			{
+				Request::insert_aRequestInRequests_DriverTable($requestID,$driverID,$this);
+				
+                             
+			}
+			else 
+				Request::setRequestStatusInRequest_DriverTable($requestID,$driverID ,'accepteed',$this);
+			if ( (int) $Request['UNIX_TIMESTAMP(requestTime)'] < time())
+			{
+				$requestTime= "now";
+				//var_dump("am now");
+			}
+			else 
+			{
+				$requestTime= (int)$Request['UNIX_TIMESTAMP(requestTime)'] *1000;
+			}
+			
+			// null acceptanceTime, driver on the way time 
+			  Request::nullTime('driverAcceptedTime',$requestID,$this);
+			  Request::nullTime('driverOnTheWayTime',$requestID,$this);
+			  Request::nullTime('passengerOnBoardTime',$requestID,$this);
+			// send the notification to the guy new guy
+			$tableName = "drivers";
+			$GCMID = User::getRegistrationTokenUsingID ($driverID,$tableName,$this);
+			$passengerInfo = User::getNamePhoneUsingID ($Request['passengerID'],"passengers",$this);
+			$firebaseData = array("status" => "0",
+			"request_id" => $requestID,
+			"pickup" => $Request['pickupLatitude'] . "," . $Request['pickupLongitude']  ,
+			"pickup_text" => $Request['pickup_text'] ,
+			"dest" => $Request['destinationLatitude'] . "," . $Request['destinationLongitude'],
+			"dest_text" => $Request['dest_text'],
+			"time" => $requestTime,
+			"notes" => $Request['notes'], 
+			"passenger_name" => $passengerInfo['fullname'],
+			"passenger_phone" => $passengerInfo['phone'],
+			"price" =>  $Request['price']
+			
+			);
+		//	var_dump($firebaseData);
+			
+			Firebase::sendData($firebaseData,$GCMID,"driver",60);
+			$data = array ('status' => '0', 'request_id' => $requestID );
+			return $response->withJson($data,200);
+		}
+		else if ($requestStatus == 'noDriver' || $requestStatus == 'pending')
+		{
+			$data = array ('status' => '2', 'error_msg' => $requestStatus  );
+			return $response->withJson($data,500);
+			
+		}
+		else if ($requestStatus == 'completed' || $requestStatus == 'canceled')// if request is not pending, return its status 
+			{
+				$data = array ('status' => '2', 'error_msg' => $requestStatus );
+				return $response->withJson($data,500);
+			}
+
+	
+});
+
+$app->post('/admin/cancel/', function($request, $response, $args){
+
+	$data=$request->getParsedBody();
+	
+	$ExpectedParametersArray = array ('request_id');
+	$areSet =  areAllParametersSet($data,$ExpectedParametersArray);
+	if (!$areSet){return returnMissingParameterDataResponse($this);}
+	$data = filterRequestParameters ($data,$ExpectedParametersArray);
+	 
+	$requestID = $data['request_id'];
+	$status='canceled';
+	//Request::setRequestStatusInRequestsTable($requestID,$status,$this);
+	
+	//Request::getRequestStatusInRequest_DriverTable
+	// check if there is a driver that accepted the request 
+	 $driverID = Driver::getIdOfDriverWhoAcceptedTheRequest($requestID,$this);
+	 
+	 // if no driver accepted
+	if ($driverID == null) // no driver accepted can be pending(it should be pending, nodriver)
+	{	
+		//$driverID = Driver::getIdOfDriverWhoCompletedTheRequest($requestID,$this);
+		Passenger::cancelRequestInRequests($requestID,$this);
+		//Passenger::cancelRequestInRequest_Driver($requestID,$this);
+		//echo "no driver accepted";
+		// tell the passenger 
+		$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
+	$GCMID = User::getRegistrationTokenUsingID ($PassengerId,"passengers",$this);
+		
+	$firebaseData = array ("status" => "4",
+	"request_id" => $requestID);
+	Firebase::sendData($firebaseData,$GCMID,"passenger",2419200);
+	
+	
+		$data = array ('status' => '0');
+	return $response->withJson($data,200);
+	}
+	
+	else { 
+	
+	// change the database 
+	
+	Passenger::cancelRequestInRequests($requestID,$this);
+	Passenger::cancelRequestInRequest_Driver($requestID,$this);
+	//echo ' some nigga accepted ' ;// if there is a driver accepted the request
+		// get the driver GCM using his ID
+		
+		// send the driver a notification
+	$GCMID = User::getRegistrationTokenUsingID ($driverID,"drivers",$this);
+	$firebaseData = array ("status" => "1","request_id" => $requestID);
+	Firebase::sendData($firebaseData,$GCMID,"driver",2419200);
+	Driver::activateDriverAfterComletingTheTrip ($driverID,$this);
+	
+	
+	// send the passenger a notification
+	$PassengerId = Passenger::getPassengerID_whoMadeRequest($requestID,$this);
+	$GCMID = User::getRegistrationTokenUsingID ($PassengerId,"passengers",$this);
+		
+	$firebaseData = array ("status" => "4",
+	"request_id" => $requestID);
+	Firebase::sendData($firebaseData,$GCMID,"passenger",2419200);
+	
+	
+	$data = array ('status' => '0');
+	return $response->withJson($data,200);
+	}
+
+
+});
+
+$app->post('/admin/null/', function($request, $response, $args){
+    Request::nullTime('driverAcceptedTime',212,$this);
+	
+	
+});
 ?>
 
 
 
+	

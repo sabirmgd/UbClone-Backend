@@ -34,7 +34,7 @@ class Request{
 		
 		$getRequestStatusSql = "SELECT `status` FROM `request_driver` 
 							WHERE 
-							requestID = :requestID
+							requestID = :requestID AND
 							driverID = :driverID";
 							
 		$getRequestStatusStatement= $App->db->prepare($getRequestStatusSql);
@@ -101,8 +101,9 @@ class Request{
 	
 
 
-	public static function getClosestDriver($pickupLatitude,$pickupLongitude,$requestID,$time,$genderBool,$lastActiveMinutes,$App){
-		$getCloseDriversDidntMissSql=' SELECT  * , 111.045 * DEGREES(ACOS(COS(RADIANS(:latitude)) * COS(RADIANS(latitude))
+	public static function getClosestDriver($pickupLatitude,$pickupLongitude,$requestID,$time,$genderBool,$lastActiveMinutes,$passengerGender,$App){
+		$getCloseDriversDidntMissSql=' SELECT  * ,
+		111.045 * DEGREES(ACOS(COS(RADIANS(:latitude)) * COS(RADIANS(latitude))
 			* COS(RADIANS(longitude) - RADIANS(:longitude))
 			+ SIN(RADIANS(:latitude))
 			* SIN(RADIANS(latitude))))
@@ -120,7 +121,7 @@ class Request{
 			
 			$genderSql = "";
 			
-			if ($genderBool == "1")
+			if ($genderBool == "1" || (  $genderBool == "0" && $passengerGender =="male")              )
 			{
 			$genderSql = " AND gender =	:female_driver";	
 			}
@@ -139,6 +140,10 @@ class Request{
 			$getCloseDriverStatment->bindParam(':lastActiveMinutes', $lastActiveMinutes, PDO::PARAM_INT);
 			if ($genderBool == "1"){
 				$gender ='female';
+			$getCloseDriverStatment->bindParam(':female_driver', $gender, PDO::PARAM_STR);
+			}
+			if ($genderBool == "0" && $passengerGender =="male"){
+				$gender ='male';
 			$getCloseDriverStatment->bindParam(':female_driver', $gender, PDO::PARAM_STR);
 			}
 			
@@ -162,7 +167,9 @@ class Request{
 			return $time;
 		}
 		else {
-			return $time = date('Y-m-d H:i:s', $time);
+			$time =(int) ($time/1000);
+			$time = gmdate('Y-m-d H:i:s', $time);
+			return $time ;
 			}
 	}
 	
@@ -189,10 +196,30 @@ class Request{
 		
 			$insertToDriverRequestStatement->execute();
 	}
-		
+	
+
+public static function setTime ($columnName,$requestID,$App)
+{
+$time = (gmdate("Y-m-d H:i:s", time()));
+//echo $time;
+	$sql = "UPDATE requests SET  $columnName = ? WHERE ID = $requestID ";
+	$stmt = $App->db->prepare($sql);
+	$stmt->execute(array( $time));
+	
+}	
+
+public static function nullTime ($columnName,$requestID,$App)
+{
+$time = null;
+//echo $time;
+	$sql = "UPDATE requests SET $columnName = ? WHERE ID = $requestID ";
+	$stmt = $App->db->prepare($sql);
+	$stmt->execute(array( $time));
+	
+}	
+    	
 	
 }
-	
-    
+
 
 ?>

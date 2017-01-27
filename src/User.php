@@ -96,7 +96,7 @@ class User
     $str = '';
     $max = mb_strlen($keyspace, '8bit') - 1;
     for ($i = 0; $i < $length; ++$i) {
-        $str .= $keyspace[random_int(0, $max)];
+        $str .= $keyspace[rand(0, $max)];
     }
     return $str;
 }
@@ -109,6 +109,20 @@ class User
 		$getUserIDStatement->execute(array($email));
 		$userID= $getUserIDStatement->fetch()['ID'];
 		return $userID;
+	}catch (PDOException $ex){
+		return $ex->getMessage();
+		}
+	
+			}
+			
+			public static function getUserGender($email,$tableName,$App){
+
+	$getUserIDSql = "SELECT gender FROM  $tableName WHERE email=?";
+	$getUserIDStatement = $App->db->prepare($getUserIDSql);
+	try{
+		$getUserIDStatement->execute(array($email));
+		$gender= $getUserIDStatement->fetch()['gender'];
+		return $gender;
 	}catch (PDOException $ex){
 		return $ex->getMessage();
 		}
@@ -172,6 +186,15 @@ class User
 		
 	}
 	
+	public static function getNamePhoneUsingID ($ID,$tableName,$App){
+		$userStatement = $App->db->prepare("SELECT fullname, phone FROM $tableName WHERE ID = ? ");
+		$userStatement->execute(array($ID));
+
+	
+	$userRow = $userStatement->fetch();
+		return $userRow;
+		
+	}
 	public static function Null_allGCMID_exceptLoggedInUser ($email,$GCMID,$tableName,$App)
 	{	
 	$NullSql = "UPDATE $tableName SET GCMID = NULL 
@@ -181,6 +204,14 @@ class User
 	$NullStatement->execute(array ($email,$GCMID));	
 	}
 	
+	public static function getPrice ($time,$App)
+	{	
+	$pricesSql = "SELECT * FROM `prices`
+	WHERE ( ? BETWEEN startTime AND endTime) " ;
+	$pricesStatement = $App->db->prepare ($pricesSql);
+	$pricesStatement->execute(array ($time));	
+	return $pricesStatement->fetch();
+	}
 	
 }
 

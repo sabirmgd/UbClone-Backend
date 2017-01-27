@@ -2,7 +2,7 @@
 
 class Firebase{
 	
-	public static function sendData($data,$registrationID,$to){
+	public static function sendData($data,$registrationID,$to,$duration){
 	if ($to == 'driver')
 	{
 			$apiKey = "AIzaSyAzMqsMU9Lfu2Yx5Dc-JgSSgMrrqZdysQQ";
@@ -26,7 +26,9 @@ class Firebase{
     $fields = array(
         'registration_ids' => $registrationIDs,
 		'priority' => 'high',
+		
         'data' => $data,
+		'time_to_live' => $duration
     );
     $headers = array(
         'Authorization: key=' . $apiKey,
@@ -54,7 +56,7 @@ class Firebase{
     // Close connection
     curl_close($ch);
     // print the result if you really need to print else neglate thi
-    echo $result;
+   // echo $result;
     //print_r($result);
     //var_dump($result);
 	
